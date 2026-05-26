@@ -1,0 +1,10 @@
+#!/usr/bin/env bash
+# Openbox autostart – runs as user "abc" when the session starts.
+# Dark solid background (no wallpaper daemon needed).
+xsetroot -solid "#1a1a2e" &
+
+# Open desktop icons so user can choose MT4 or MT5 manually.
+mkdir -p /config/Desktop
+if command -v pcmanfm >/dev/null 2>&1; then
+  pcmanfm --desktop --profile LXDE >/dev/null 2>&1 &
+fi

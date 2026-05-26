@@ -1,0 +1,11 @@
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=MetaTrader 5
+Comment=RoohiTrade MT5 Launcher
+Exec=/bin/bash /usr/local/bin/launch-mt5
+TryExec=/bin/bash
+Icon=utilities-terminal
+Terminal=false
+StartupNotify=false
+Categories=Network;Finance;

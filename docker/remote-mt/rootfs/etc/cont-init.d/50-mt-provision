@@ -1,0 +1,229 @@
+#!/usr/bin/with-contenv bash
+set -euo pipefail
+
+export HOME=/config
+export WINEPREFIX=/config/.wine
+
+LOG_DIR=/config/.mt-logs
+MARKER=/config/.mt-provisioned
+INSTALLERS_DIR=/opt/mt-installers
+WINE_BIN=""
+
+mkdir -p "$LOG_DIR" /config/Desktop /config/.config/openbox /config/.config/libfm
+
+disable_container_basic_auth() {
+  local files=(
+    /etc/nginx/sites-available/default
+    /etc/nginx/sites-enabled/default
+  )
+
+  local file
+  for file in "${files[@]}"; do
+    [[ -f "$file" ]] || continue
+    sed -E -i 's/^([[:space:]]*)auth_basic([[:space:]]+.*)$/\1# auth_basic\2/' "$file" || true
+    sed -E -i 's/^([[:space:]]*)auth_basic_user_file([[:space:]]+.*)$/\1# auth_basic_user_file\2/' "$file" || true
+  done
+}
+
+ensure_pcmanfm() {
+  if command -v pcmanfm >/dev/null 2>&1; then
+    return 0
+  fi
+
+  export DEBIAN_FRONTEND=noninteractive
+  apt-get update -qq || true
+  apt-get install -y --no-install-recommends pcmanfm >/dev/null 2>&1 || true
+}
+
+apply_kasmvnc_geometry() {
+  local width="${CUSTOM_RES_W:-1366}"
+  local height="${CUSTOM_RES_H:-768}"
+  local kasmvnc_run="/etc/s6-overlay/s6-rc.d/svc-kasmvnc/run"
+
+  [[ -f "$kasmvnc_run" ]] || return 0
+
+  if [[ ! "$width" =~ ^[0-9]+$ ]] || [[ ! "$height" =~ ^[0-9]+$ ]]; then
+    width=1366
+    height=768
+  fi
+
+  sed -E -i "s/-geometry[[:space:]]+[0-9]+x[0-9]+/-geometry ${width}x${height}/g" "$kasmvnc_run" || true
+}
+
+setup_openbox_config() {
+  local ob_dir=/config/.config/openbox
+  local autostart="$ob_dir/autostart"
+
+  mkdir -p "$ob_dir" /config/Desktop
+
+  if [[ -f /etc/xdg/openbox/autostart ]]; then
+    cp -f /etc/xdg/openbox/autostart "$autostart"
+  fi
+
+  if [[ -f /etc/xdg/openbox/menu.xml ]]; then
+    cp -f /etc/xdg/openbox/menu.xml "$ob_dir/menu.xml"
+  fi
+
+  if ! grep -q 'pcmanfm --desktop --profile LXDE' "$autostart" 2>/dev/null; then
+    cat >>"$autostart" <<'EOF'
+
+# Show desktop icons.
+if command -v pcmanfm >/dev/null 2>&1; then
+  pkill -x pcmanfm >/dev/null 2>&1 || true
+  pcmanfm --desktop --profile LXDE >/config/.mt-logs/pcmanfm.log 2>&1 &
+fi
+EOF
+  fi
+
+  if ! grep -q '/usr/local/bin/ensure-mt-installed' "$autostart" 2>/dev/null; then
+    cat >>"$autostart" <<'EOF'
+
+# Install MT4/MT5 silently on first run per user profile.
+if [[ -x /usr/local/bin/ensure-mt-installed ]]; then
+  /usr/local/bin/ensure-mt-installed >/config/.mt-logs/deferred-install.log 2>&1 &
+fi
+EOF
+  fi
+
+  cat >/config/.config/libfm/libfm.conf <<'EOF'
+[config]
+quick_exec=1
+EOF
+
+  cp -f /usr/share/applications/roohi-mt4.desktop /config/Desktop/roohi-mt4.desktop 2>/dev/null || true
+  cp -f /usr/share/applications/roohi-mt5.desktop /config/Desktop/roohi-mt5.desktop 2>/dev/null || true
+  chmod 0755 /config/Desktop/roohi-mt4.desktop /config/Desktop/roohi-mt5.desktop 2>/dev/null || true
+
+  chown -R abc:abc /config/.config /config/Desktop /config/.mt-logs 2>/dev/null || true
+  chmod 0755 "$autostart" 2>/dev/null || true
+}
+
+patch_kasmvnc_bundle_guard() {
+  local bundle=/usr/local/share/kasmvnc/www/dist/main.bundle.js
+  [[ -f "$bundle" ]] || return 0
+
+  sed -i 's#var timeSinceLastActivityInS = (Date.now() - UI.rfb.lastActiveAt) / 1000;#if (UI.rfb == null || typeof UI.rfb.lastActiveAt === "undefined") { return; } var timeSinceLastActivityInS = (Date.now() - UI.rfb.lastActiveAt) / 1000;#g' "$bundle" || true
+}
+
+warm_terminal_cache() {
+  local base="$WINEPREFIX/drive_c"
+  local mt4_cache=/config/.mt4-terminal-path
+  local mt5_cache=/config/.mt5-terminal-path
+  local mt4_path=""
+  local mt5_path=""
+
+  [[ -d "$base" ]] || return 0
+
+  if [[ ! -s "$mt5_cache" ]]; then
+    mt5_path=$(find "$base/Program Files" "$base/Program Files (x86)" "$base" 2>/dev/null \
+      -type f \( -iname terminal.exe -o -iname terminal64.exe \) \
+      \( -ipath '*MetaTrader*5*' -o -ipath '*MT5*' -o -ipath '*terminal*5*' \) | head -n1 || true)
+    if [[ -n "${mt5_path:-}" ]]; then
+      printf '%s\n' "$mt5_path" > "$mt5_cache"
+      chown abc:abc "$mt5_cache"
+    fi
+  fi
+
+  if [[ ! -s "$mt4_cache" ]]; then
+    mt4_path=$(find "$base/Program Files" "$base/Program Files (x86)" "$base" 2>/dev/null \
+      -type f \( -iname terminal.exe -o -iname terminal64.exe \) \
+      | grep -Ei 'metatrader[^/]*4|/mt4' \
+      | grep -Eiv 'metatrader[^/]*5|/mt5' \
+      | head -n1 || true)
+    if [[ -n "${mt4_path:-}" ]]; then
+      printf '%s\n' "$mt4_path" > "$mt4_cache"
+      chown abc:abc "$mt4_cache"
+    fi
+  fi
+}
+
+detect_wine_binary() {
+  if [[ -x /usr/bin/wine ]]; then
+    WINE_BIN="/usr/bin/wine"
+  elif [[ -x /usr/bin/wine64 ]]; then
+    WINE_BIN="/usr/bin/wine64"
+  elif [[ -x /usr/bin/wine32 ]]; then
+    WINE_BIN="/usr/bin/wine32"
+  elif command -v wine >/dev/null 2>&1; then
+    WINE_BIN="$(command -v wine)"
+  elif command -v wine64 >/dev/null 2>&1; then
+    WINE_BIN="$(command -v wine64)"
+  elif command -v wine32 >/dev/null 2>&1; then
+    WINE_BIN="$(command -v wine32)"
+  elif [[ -x /usr/lib/wine/wine ]]; then
+    WINE_BIN="/usr/lib/wine/wine"
+  elif [[ -x /usr/lib/wine/wine64 ]]; then
+    WINE_BIN="/usr/lib/wine/wine64"
+  else
+    WINE_BIN=""
+  fi
+}
+
+run_as_abc() {
+  if command -v s6-setuidgid >/dev/null 2>&1; then
+    s6-setuidgid abc "$@"
+  elif command -v su >/dev/null 2>&1; then
+    su -s /bin/bash abc -c "$*"
+  else
+    "$@"
+  fi
+}
+
+run_wine_installer() {
+  local installer="$1"
+  local name="$2"
+  local log_file="$LOG_DIR/${name}.log"
+
+  echo "[mt-provision] installing $name from: $installer" >> "$LOG_DIR/provision.log"
+
+  run_as_abc env HOME=/config WINEPREFIX=/config/.wine \
+    "$WINE_BIN" "$installer" /silent /auto > "$log_file" 2>&1 || true
+
+  if ! grep -Eqi 'terminal(64)?\.exe' "$log_file"; then
+    run_as_abc env HOME=/config WINEPREFIX=/config/.wine \
+      "$WINE_BIN" "$installer" /S >> "$log_file" 2>&1 || true
+  fi
+
+  if ! grep -Eqi 'terminal(64)?\.exe' "$log_file"; then
+    run_as_abc env HOME=/config WINEPREFIX=/config/.wine \
+      "$WINE_BIN" start /wait "" "$installer" /auto >> "$log_file" 2>&1 || true
+  fi
+}
+
+disable_container_basic_auth
+ensure_pcmanfm
+apply_kasmvnc_geometry
+setup_openbox_config
+patch_kasmvnc_bundle_guard
+warm_terminal_cache
+
+chmod 0755 /usr/local/bin/launch-mt4 /usr/local/bin/launch-mt5 /usr/local/bin/ensure-mt-installed 2>/dev/null || true
+
+if [[ -f "$MARKER" ]]; then
+  exit 0
+fi
+
+detect_wine_binary
+if [[ -z "${WINE_BIN:-}" ]]; then
+  echo "[mt-provision] no wine binary found" > "$LOG_DIR/provision.log"
+  exit 0
+fi
+
+if ! compgen -G "$INSTALLERS_DIR/*.exe" > /dev/null; then
+  echo "[mt-provision] no installer found in $INSTALLERS_DIR" > "$LOG_DIR/provision.log"
+  touch "$MARKER"
+  exit 0
+fi
+
+MT4_INSTALLER=$(find "$INSTALLERS_DIR" -maxdepth 1 -type f \( -iname '*mt4*.exe' -o -iname '*metatrader4*.exe' \) | head -n1 || true)
+MT5_INSTALLER=$(find "$INSTALLERS_DIR" -maxdepth 1 -type f \( -iname '*mt5*.exe' -o -iname '*metatrader5*.exe' \) | head -n1 || true)
+
+if [[ -n "${MT4_INSTALLER:-}" ]]; then
+  run_wine_installer "$MT4_INSTALLER" "mt4"
+fi
+
+if [[ -n "${MT5_INSTALLER:-}" ]]; then
+  run_wine_installer "$MT5_INSTALLER" "mt5"
+fi
+
+touch "$MARKER"

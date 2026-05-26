@@ -1,0 +1,39 @@
+desktop:
+  resolution:
+    width: 1600
+    height: 900
+  allow_resize: false
+  pixel_depth: 24
+
+encoding:
+  max_frame_rate: 30
+  full_frame_updates: none
+  rect_encoding_mode:
+    min_quality: 7
+    max_quality: 8
+    consider_lossless_quality: 10
+    rectangle_compress_threads: auto
+  video_encoding_mode:
+    jpeg_quality: -1
+    webp_quality: -1
+    max_resolution:
+      width: 1600
+      height: 900
+    enter_video_encoding_mode:
+      time_threshold: 5
+      area_threshold: 45%
+    exit_video_encoding_mode:
+      time_threshold: 3
+    scaling_algorithm: progressive_bilinear
+
+network:
+  protocol: http
+  interface: 0.0.0.0
+  websocket_port: 6901
+  use_ipv4: true
+  use_ipv6: true
+  ssl:
+    require_ssl: false
+
+command_line:
+  prompt: false

@@ -1,0 +1,7 @@
+[Desktop Entry]
+Type=Application
+Name=Roohi MT Session Tune
+Exec=/usr/local/bin/mt-session-tune
+Terminal=false
+X-GNOME-Autostart-enabled=true
+OnlyShowIn=XFCE;

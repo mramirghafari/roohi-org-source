@@ -1,0 +1,19 @@
+#noVNC_control_bar_anchor,
+#noVNC_control_bar,
+#noVNC_control_bar_hint,
+#noVNC_keyboard_control,
+#lsbar,
+#fileButton,
+#audioButton,
+#micButton,
+#mySidenav,
+#menuTab,
+.sidenavnew,
+#dragHandler,
+#fullscreenTrigger,
+#closeMenu,
+#noVNC_connection_stats {
+    display: none !important;
+    visibility: hidden !important;
+    pointer-events: none !important;
+}

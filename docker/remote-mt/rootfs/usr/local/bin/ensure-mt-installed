@@ -1,0 +1,87 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+export HOME=/config
+export WINEPREFIX=/config/.wine
+export DISPLAY=${DISPLAY:-:1}
+export WINEDEBUG=-all
+
+LOG_DIR=/config/.mt-logs
+INSTALLERS_DIR=/opt/mt-installers
+MARKER=/config/.mt-provisioned
+
+mkdir -p "$LOG_DIR"
+
+has_mt4() {
+  find "$WINEPREFIX/drive_c" -maxdepth 7 -type f \( -iname terminal.exe -o -iname terminal64.exe \) 2>/dev/null \
+    | grep -Eiq 'metatrader[^/]*4|/mt4'
+}
+
+has_mt5() {
+  find "$WINEPREFIX/drive_c" -maxdepth 7 -type f \( -iname terminal.exe -o -iname terminal64.exe \) 2>/dev/null \
+    | grep -Eiq 'metatrader[^/]*5|/mt5'
+}
+
+find_wine() {
+  if command -v wine >/dev/null 2>&1; then
+    command -v wine
+    return 0
+  fi
+  if command -v wine64 >/dev/null 2>&1; then
+    command -v wine64
+    return 0
+  fi
+  if [[ -x /usr/lib/wine/wine ]]; then
+    echo /usr/lib/wine/wine
+    return 0
+  fi
+  if [[ -x /usr/lib/wine/wine64 ]]; then
+    echo /usr/lib/wine/wine64
+    return 0
+  fi
+  return 1
+}
+
+pick_installer() {
+  local mode="$1"
+  if [[ "$mode" == "mt4" ]]; then
+    find "$INSTALLERS_DIR" -maxdepth 1 -type f \( -iname '*mt4*.exe' -o -iname '*metatrader4*.exe' \) | head -n1
+  else
+    find "$INSTALLERS_DIR" -maxdepth 1 -type f \( -iname '*mt5*.exe' -o -iname '*metatrader5*.exe' \) | head -n1
+  fi
+}
+
+run_installer() {
+  local wine_bin="$1"
+  local installer="$2"
+  local tag="$3"
+  local log_file="$LOG_DIR/${tag}-install.log"
+
+  "$wine_bin" "$installer" /silent /auto >"$log_file" 2>&1 || true
+  "$wine_bin" "$installer" /S >>"$log_file" 2>&1 || true
+  "$wine_bin" start /wait "" "$installer" /auto >>"$log_file" 2>&1 || true
+}
+
+WINE_BIN="$(find_wine || true)"
+if [[ -z "$WINE_BIN" ]]; then
+  echo "[mt-deferred] wine runtime not found" >>"$LOG_DIR/provision.log"
+  exit 0
+fi
+
+if ! has_mt4; then
+  MT4_INSTALLER="$(pick_installer mt4 || true)"
+  if [[ -n "$MT4_INSTALLER" ]]; then
+    run_installer "$WINE_BIN" "$MT4_INSTALLER" mt4
+  fi
+fi
+
+if ! has_mt5; then
+  MT5_INSTALLER="$(pick_installer mt5 || true)"
+  if [[ -n "$MT5_INSTALLER" ]]; then
+    run_installer "$WINE_BIN" "$MT5_INSTALLER" mt5
+  fi
+fi
+
+if has_mt4 && has_mt5; then
+  touch "$MARKER" 2>/dev/null || true
+fi

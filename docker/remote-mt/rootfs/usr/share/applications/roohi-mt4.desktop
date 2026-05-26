@@ -1,0 +1,11 @@
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=MetaTrader 4
+Comment=RoohiTrade MT4 Launcher
+Exec=/bin/bash /usr/local/bin/launch-mt4
+TryExec=/bin/bash
+Icon=utilities-terminal
+Terminal=false
+StartupNotify=false
+Categories=Network;Finance;
