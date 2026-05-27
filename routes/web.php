@@ -89,9 +89,14 @@ Route::post('/sendotp', [App\Http\Controllers\Auth\SMSController::class, 'index'
 Route::get('/otp', [App\Http\Controllers\Auth\SMSController::class, 'otp_page'])->name('otpPage');
 Route::post('/otpprocess', [App\Http\Controllers\Auth\SMSController::class, 'vilidation_code'])->name('otpProcess');
 
+
+
+// Payment Campaign V2 routes
 Route::get('/payment', [PaymentRegistrationController::class, 'show'])->name('payment.form');
 Route::post('/payment', [PaymentRegistrationController::class, 'request'])->name('payment.request');
 Route::get('/payment/callback', [PaymentRegistrationController::class, 'callback'])->name('payment.callback');
+Route::get('/payment-campaigns/{campaign}/register', [PaymentRegistrationController::class, 'show'])->name('payment-campaigns.register.form');
+Route::post('/payment-campaigns/{campaign}/register', [PaymentRegistrationController::class, 'request'])->name('payment-campaigns.register');
 
 
 Route::get('/access/{token}', [RemoteAccessController::class, 'access'])->name('remote.access');
@@ -218,6 +223,12 @@ Route::group(['middleware' => ['auth']], function () {
         Route::post('/admin/user/{user}/groups', [UserController::class, 'addUserToGroup'])->name('user.groups.add');
         Route::post('/admin/user/{user}/groups/{group}/remove', [UserController::class, 'removeUserFromGroup'])->name('user.groups.remove');
 
+        Route::get('/admin/payment-campaigns', [App\Http\Controllers\PaymentCampaignController::class, 'index'])->name('payment-campaigns.index');
+        Route::get('/admin/payment-campaigns/create', [App\Http\Controllers\PaymentCampaignController::class, 'create'])->name('payment-campaigns.create');
+        Route::post('/admin/payment-campaigns', [App\Http\Controllers\PaymentCampaignController::class, 'store'])->name('payment-campaigns.store');
+        Route::get('/admin/payment-campaigns/{paymentCampaign}/registrations/export', [App\Http\Controllers\PaymentCampaignController::class, 'exportRegistrations'])->name('payment-campaigns.registrations.export');
+        Route::get('/admin/payment-campaigns/{paymentCampaign}', [App\Http\Controllers\PaymentCampaignController::class, 'show'])->name('payment-campaigns.show');
+
         //blog
         Route::get('/admin/blogCats', [BlogCategoryController::class, 'index'])->name('blogCategoriesAdmin.index');
         Route::post('/admin/blogCats/store', [BlogCategoryController::class, 'store'])->name('blogCategoriesAdmin.store');
@@ -248,4 +259,3 @@ Route::group(['middleware' => ['auth']], function () {
         Route::get('/channel', [App\Http\Controllers\DashboardController::class, 'channel'])->name('channel');
     });
 });
-

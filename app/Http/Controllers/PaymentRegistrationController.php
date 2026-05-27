@@ -2,27 +2,54 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\PaymentCampaign;
 use App\Models\PaymentRegistration;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\View\View;
 
 class PaymentRegistrationController extends Controller
 {
     private const AMOUNT = 4900000;
 
+    private const DEFAULT_CAMPAIGN_SLUG = 'default';
+
     private const CALLBACK_EXPIRE_MINUTES = 20;
 
-    public function show(): View
+    public function show(?PaymentCampaign $campaign = null): View
     {
+        $campaign = $this->resolveCampaign($campaign);
+
+        abort_unless($campaign->is_active, 404);
+
         return view('payment', [
-            'amount' => self::AMOUNT,
+            'amount' => $this->campaignPayableAmount($campaign),
+            'campaign' => $campaign,
         ]);
     }
 
-    public function request(Request $request): RedirectResponse
+    public function request(Request $request, ?PaymentCampaign $campaign = null): RedirectResponse
     {
+        $campaign = $this->resolveCampaign($campaign);
+
+        abort_unless($campaign->is_active, 404);
+
+        if (!$this->paymentRegistrationsCanBeLinked()) {
+            return $this->paymentFormRedirect($campaign)->with([
+                'payment_state' => 'error',
+                'payment_message' => 'ساختار دیتابیس پرداخت کمپین هنوز به‌روزرسانی نشده است. لطفا migrationها اجرا شوند.',
+            ]);
+        }
+
+        if ($campaign->is_full) {
+            return $this->paymentFormRedirect($campaign)->with([
+                'payment_state' => 'error',
+                'payment_message' => 'ظرفیت این کمپین تکمیل شده است.',
+            ]);
+        }
+
         $validated = $request->validate([
             'full_name' => ['required', 'string', 'min:3', 'max:150', 'regex:/^(?!.*[0-9۰-۹])[\p{Arabic}\x{200C}\s]+$/u'],
             'mobile' => ['required', 'string', 'regex:/^09[0-9]{9}$/'],
@@ -35,10 +62,11 @@ class PaymentRegistrationController extends Controller
         ]);
 
         $registration = PaymentRegistration::query()->create([
+            'payment_campaign_id' => $campaign->id,
             'full_name' => (string) $validated['full_name'],
             'mobile' => (string) $validated['mobile'],
-            'amount' => self::AMOUNT,
-            'currency' => (string) config('zarinpal.currency', 'IRT'),
+            'amount' => $this->campaignPayableAmount($campaign),
+            'currency' => (string) $campaign->currency,
             'tracking_code' => $this->generateTrackingCode(),
             'status' => PaymentRegistration::STATUS_PENDING,
             'message' => 'در انتظار پرداخت کاربر',
@@ -51,9 +79,9 @@ class PaymentRegistrationController extends Controller
 
         try {
             $gateway = zarinpal()
-                ->amount(self::AMOUNT)
+                ->amount($this->campaignPayableAmount($campaign))
                 ->request()
-                ->description('ثبت نام روحی ترید - ' . $registration->full_name . ' - ' . $registration->tracking_code)
+                ->description($campaign->title . ' - ' . $registration->full_name . ' - ' . $registration->tracking_code)
                 ->callbackUrl($callbackUrl)
                 ->mobile($registration->mobile);
 
@@ -69,7 +97,7 @@ class PaymentRegistrationController extends Controller
                 'message' => 'خطا در ارتباط با درگاه پرداخت',
             ]);
 
-            return redirect()->route('payment.form')->with([
+            return $this->paymentFormRedirect($campaign)->with([
                 'payment_state' => 'error',
                 'payment_message' => 'ارتباط با درگاه پرداخت برقرار نشد. لطفا دوباره تلاش کنید.',
             ])->withInput();
@@ -82,7 +110,7 @@ class PaymentRegistrationController extends Controller
                 'message' => $response->error()->message(),
             ]);
 
-            return redirect()->route('payment.form')->with([
+            return $this->paymentFormRedirect($campaign)->with([
                 'payment_state' => 'error',
                 'payment_message' => 'ارسال به درگاه ناموفق بود: ' . $response->error()->message(),
             ])->withInput();
@@ -96,7 +124,7 @@ class PaymentRegistrationController extends Controller
             'message' => 'ارسال به درگاه انجام شد',
         ]);
 
-        return $response->redirect() ?? redirect()->route('payment.form')->with([
+        return $response->redirect() ?? $this->paymentFormRedirect($campaign)->with([
             'payment_state' => 'error',
             'payment_message' => 'هدایت به درگاه انجام نشد. دوباره تلاش کنید.',
         ]);
@@ -115,7 +143,7 @@ class PaymentRegistrationController extends Controller
             ]);
         }
 
-        $registration = PaymentRegistration::query()->find($registrationId);
+        $registration = PaymentRegistration::query()->with('campaign')->find($registrationId);
 
         if (!$registration) {
             return redirect()->route('payment.form')->with([
@@ -149,7 +177,7 @@ class PaymentRegistrationController extends Controller
                 ]);
             }
 
-            return redirect()->route('payment.form')->with([
+            return $this->paymentFormRedirect($registration->campaign)->with([
                 'payment_state' => $newStatus,
                 'payment_message' => $newStatus === PaymentRegistration::STATUS_EXPIRED
                     ? 'مهلت پرداخت به پایان رسیده است.'
@@ -160,7 +188,7 @@ class PaymentRegistrationController extends Controller
         if ($authority === '') {
             $this->markAsError($registration, null, 'اتوریتی از زرین پال دریافت نشد.');
 
-            return redirect()->route('payment.form')->with([
+            return $this->paymentFormRedirect($registration->campaign)->with([
                 'payment_state' => 'error',
                 'payment_message' => 'اتوریتی تراکنش موجود نیست.',
             ]);
@@ -181,7 +209,7 @@ class PaymentRegistrationController extends Controller
 
             $this->markAsError($registration, null, 'خطا در بررسی تراکنش در زرین پال');
 
-            return redirect()->route('payment.form')->with([
+            return $this->paymentFormRedirect($registration->campaign)->with([
                 'payment_state' => 'error',
                 'payment_message' => 'بررسی تراکنش با خطا مواجه شد. لطفا با پشتیبانی تماس بگیرید.',
             ]);
@@ -218,7 +246,7 @@ class PaymentRegistrationController extends Controller
 
         $this->markAsError($registration, $errorCode, $errorMessage);
 
-        return redirect()->route('payment.form')->with([
+        return $this->paymentFormRedirect($registration->campaign)->with([
             'payment_state' => 'error',
             'payment_message' => 'پرداخت ناموفق بود: ' . $errorMessage,
         ]);
@@ -239,9 +267,11 @@ class PaymentRegistrationController extends Controller
 
     private function successRedirect(PaymentRegistration $registration, string $message): RedirectResponse
     {
-        return redirect()->route('payment.form')->with([
+        $campaignMessage = $registration->campaign?->success_message ?: $message;
+
+        return $this->paymentFormRedirect($registration->campaign)->with([
             'payment_state' => 'success',
-            'payment_message' => $message,
+            'payment_message' => $campaignMessage,
             'payment_tracking_code' => $registration->tracking_code,
             'payment_ref_id' => $registration->ref_id,
         ]);
@@ -254,5 +284,71 @@ class PaymentRegistrationController extends Controller
         } while (PaymentRegistration::query()->where('tracking_code', $code)->exists());
 
         return $code;
+    }
+
+    private function resolveCampaign(?PaymentCampaign $campaign = null): PaymentCampaign
+    {
+        if ($campaign) {
+            return $campaign;
+        }
+
+        if (!Schema::hasColumn('payment_campaigns', 'slug')) {
+            $defaults = [
+                'description' => null,
+                'original_price' => 30000000,
+                'current_price' => self::AMOUNT,
+                'capacity' => 20,
+                'is_active' => true,
+            ];
+
+            if (Schema::hasColumn('payment_campaigns', 'display_capacity')) {
+                $defaults['display_capacity'] = '20 نفر';
+            }
+
+            return PaymentCampaign::query()->firstOrCreate([
+                'title' => 'ثبت نام سیستم اقتصادی اکو روحی',
+            ], $defaults);
+        }
+
+        $defaults = [
+            'title' => 'ثبت نام سیستم اقتصادی اکو روحی',
+            'amount' => self::AMOUNT,
+            'currency' => (string) config('zarinpal.currency', 'IRT'),
+            'description' => null,
+            'original_price' => 30000000,
+            'current_price' => self::AMOUNT,
+            'capacity' => 20,
+            'button_text' => 'پرداخت و ثبت نام',
+            'success_message' => 'ثبت نام شما با موفقیت انجام شد.',
+            'is_active' => true,
+        ];
+
+        if (Schema::hasColumn('payment_campaigns', 'display_capacity')) {
+            $defaults['display_capacity'] = '20 نفر';
+        }
+
+        return PaymentCampaign::query()->firstOrCreate([
+            'slug' => self::DEFAULT_CAMPAIGN_SLUG,
+        ], $defaults);
+    }
+
+    private function paymentFormRedirect(?PaymentCampaign $campaign = null): RedirectResponse
+    {
+        if ($campaign && $campaign->slug !== self::DEFAULT_CAMPAIGN_SLUG) {
+            return redirect()->route('payment-campaigns.register.form', $campaign);
+        }
+
+        return redirect()->route('payment.form');
+    }
+
+    private function campaignPayableAmount(PaymentCampaign $campaign): int
+    {
+        return (int) ($campaign->amount ?: $campaign->current_price ?: self::AMOUNT);
+    }
+
+    private function paymentRegistrationsCanBeLinked(): bool
+    {
+        return Schema::hasTable('payment_registrations')
+            && Schema::hasColumn('payment_registrations', 'payment_campaign_id');
     }
 }

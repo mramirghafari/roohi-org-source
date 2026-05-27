@@ -157,8 +157,8 @@
                             </a>
                         </li>
                         <li class="menu-item user-camps">
-                            <a class="menu-link" href="{{ route('users.camps') }}">
-                                <div>کاربران کمپین 4900</div>
+                            <a class="menu-link" href="{{ route('payment-campaigns.index') }}">
+                                <div>مدیریت کمپین</div>
                             </a>
                         </li>
                     </ul>

@@ -114,8 +114,10 @@
             <div class="container">
                 <!-- Logo START -->
                 <a class="navbar-brand me-0" href="{{ asset('/') }}">
-                    <img class="light-mode-item navbar-brand-item" src="assets/images/logo.svg" alt="logo" />
-                    <img class="dark-mode-item navbar-brand-item" src="assets/images/logo-light.svg" alt="logo" />
+                    <img class="light-mode-item navbar-brand-item" src="{{ asset('assets/images/logo.svg') }}"
+                        alt="logo" />
+                    <img class="dark-mode-item navbar-brand-item" src="{{ asset('assets/images/logo-light.svg') }}"
+                        alt="logo" />
                 </a>
                 <!-- Logo END -->
 
@@ -408,22 +410,40 @@ Hero START -->
         <section class="bg-dark position-relative overflow-hidden pt-xl-8" data-bs-theme="dark">
             <!-- Blur decoration -->
             <div class="position-absolute bottom-0 end-0 mb-n9">
-                <img src="assets/images/elements/grad-shape/blur-decoration-2.svg" class="opacity-2 blur-9"
-                    alt="شکل گرادیان" />
+                <img src="{{ asset('assets/images/elements/grad-shape/blur-decoration-2.svg') }}"
+                    class="opacity-2 blur-9" alt="شکل گرادیان" />
             </div>
 
             <div class="container position-relative">
                 <!-- Title and content -->
-                <h3 class="display-5 mt-3" style="font-size: 25px">ثبت نام سیستم اقتصادی اکو روحی</h3>
+                <h3 class="display-5 mt-3" style="font-size: 25px">{{ $campaign->title }}</h3>
 
-                <p class="mb-1" style="font-size: 25px">ظرفیت 20 نفر</p>
+                @php
+                    $description = trim((string) $campaign->description);
+                    $displayCapacity = trim((string) $campaign->display_capacity);
+                    $descriptionRepeatsCapacity =
+                        $displayCapacity !== '' &&
+                        in_array(
+                            $description,
+                            [$displayCapacity, 'ظرفیت ' . $displayCapacity, 'ظرفیت: ' . $displayCapacity],
+                            true,
+                        );
+                @endphp
+
+                @if ($description !== '' && !$descriptionRepeatsCapacity)
+                    <p class="mb-1" style="font-size: 20px">{{ $campaign->description }}</p>
+                @endif
+                @if ($displayCapacity !== '')
+                    <p class="mb-1" style="font-size: 20px">ظرفیت: {{ $campaign->display_capacity }}</p>
+                @endif
                 <div class="price-box mb-4">
                     <p class="old-price">قیمت اصلی
-                        <strike style="color: red; font-size: 22px"> 30 میلیون تومان</strike>
+                        <strike style="color: red; font-size: 22px">
+                            {{ number_format((int) $campaign->original_price) }} تومان
+                        </strike>
                     </p>
-                    <p class="new-price text-center" style="color: #29ff29;font-size: 23px">فرصت ویژه پرداخت فقط 4
-                        میلیون و 900
-                        هزار تومان</p>
+                    <p class="new-price text-center" style="color: #29ff29;font-size: 23px">فرصت ویژه پرداخت فقط
+                        {{ number_format((int) $amount) }} تومان</p>
                 </div>
 
             </div>
@@ -458,39 +478,47 @@ Contact info START -->
                                 @endif
 
 
-                                <form action="{{ route('payment.request') }}" method="POST" novalidate>
-                                    @csrf
+                                @if ($campaign->is_full)
+                                    <div class="alert alert-warning mb-0">ظرفیت این کمپین تکمیل شده است.</div>
+                                @else
+                                    <form
+                                        action="{{ $campaign->slug === 'default' ? route('payment.request') : route('payment-campaigns.register', $campaign) }}"
+                                        method="POST" novalidate>
+                                        @csrf
 
-                                    <div class="mb-3">
-                                        <label class="form-label" for="full_name">نام کامل</label>
-                                        <input type="text"
-                                            class="form-control @error('full_name') is-invalid @enderror"
-                                            id="full_name" name="full_name" value="{{ old('full_name') }}"
-                                            placeholder="مثال: علی رضایی" maxlength="150"
-                                            pattern="^(?!.*[0-9۰-۹])[\u0600-\u06FF\u200C\s]+$"
-                                            oninput="this.value=this.value.replace(/[^\u0600-\u06FF\u200C\s]/g,'');"
-                                            required>
-                                        @error('full_name')
-                                            <div class="invalid-feedback">{{ $message }}</div>
-                                        @enderror
-                                    </div>
+                                        <div class="mb-3">
+                                            <label class="form-label" for="full_name">نام کامل</label>
+                                            <input type="text"
+                                                class="form-control @error('full_name') is-invalid @enderror"
+                                                id="full_name" name="full_name" value="{{ old('full_name') }}"
+                                                placeholder="مثال: علی رضایی" maxlength="150"
+                                                pattern="^(?!.*[0-9۰-۹])[\u0600-\u06FF\u200C\s]+$"
+                                                oninput="this.value=this.value.replace(/[^\u0600-\u06FF\u200C\s]/g,'');"
+                                                required>
+                                            @error('full_name')
+                                                <div class="invalid-feedback">{{ $message }}</div>
+                                            @enderror
+                                        </div>
 
-                                    <div class="mb-4">
-                                        <label class="form-label" for="mobile">موبایل</label>
-                                        <input type="text"
-                                            class="form-control @error('mobile') is-invalid @enderror" id="mobile"
-                                            name="mobile" value="{{ old('mobile') }}" placeholder="09123456789"
-                                            inputmode="numeric" maxlength="11" pattern="09[0-9]{9}"
-                                            oninput="this.value=this.value.replace(/[۰-۹]/g,function(d){return '۰۱۲۳۴۵۶۷۸۹'.indexOf(d);}).replace(/[٠-٩]/g,function(d){return '٠١٢٣٤٥٦٧٨٩'.indexOf(d);}).replace(/\D/g,'').slice(0,11);"
-                                            required>
-                                        @error('mobile')
-                                            <div class="invalid-feedback">{{ $message }}</div>
-                                        @enderror
-                                    </div>
+                                        <div class="mb-4">
+                                            <label class="form-label" for="mobile">موبایل</label>
+                                            <input type="text"
+                                                class="form-control @error('mobile') is-invalid @enderror"
+                                                id="mobile" name="mobile" value="{{ old('mobile') }}"
+                                                placeholder="09123456789" inputmode="numeric" maxlength="11"
+                                                pattern="09[0-9]{9}"
+                                                oninput="this.value=this.value.replace(/[۰-۹]/g,function(d){return '۰۱۲۳۴۵۶۷۸۹'.indexOf(d);}).replace(/[٠-٩]/g,function(d){return '٠١٢٣٤٥٦٧٨٩'.indexOf(d);}).replace(/\D/g,'').slice(0,11);"
+                                                required>
+                                            @error('mobile')
+                                                <div class="invalid-feedback">{{ $message }}</div>
+                                            @enderror
+                                        </div>
 
-                                    <button type="submit" class="btn btn-success btn-pay w-100">پرداخت و ثبت
-                                        نام</button>
-                                </form>
+                                        <button type="submit" class="btn btn-success btn-pay w-100">
+                                            {{ $campaign->button_text ?: 'پرداخت و ثبت نام' }}
+                                        </button>
+                                    </form>
+                                @endif
                             </div>
                         </div>
                     </div>
@@ -502,86 +530,6 @@ Contact info END -->
 
     </main>
     <!-- **************** MAIN CONTENT END **************** -->
-
-    <!-- =======================
-Footer START -->
-    <footer class="bg-dark pt-6 pt-md-8 position-relative" data-bs-theme="dark">
-        <div class="container">
-            <div class="row g-4 justify-content-between">
-                <!-- Widget 1 START -->
-                <div class="col-lg-4">
-                    <!-- logo -->
-                    <a href="{{ asset('/') }}">
-                        <img class="h-40px" src="assets/images/logo-light.svg" alt="logo" />
-                    </a>
-
-                    <p class="my-3 my-lg-4">
-                        ربات سیگنال مبتنی بر هوش مصنوعی روحی AI، پیشگام در زمینه مشاوره و ارائه سیگنال های سودده در
-                        بازار های ارز دیجیتال
-                    </p>
-                    <!-- Social icon -->
-                    <ul class="list-inline mb-0">
-                        <li class="list-inline-item">
-                            <a class="btn btn-xs btn-icon btn-secondary" href="#"><i
-                                    class="bi bi-facebook lh-base"></i></a>
-                        </li>
-                        <li class="list-inline-item">
-                            <a class="btn btn-xs btn-icon btn-secondary" href="#"><i
-                                    class="bi bi-instagram lh-base"></i></a>
-                        </li>
-                        <li class="list-inline-item">
-                            <a class="btn btn-xs btn-icon btn-secondary" href="#"><i
-                                    class="bi bi-twitter-x lh-base"></i></a>
-                        </li>
-                        <li class="list-inline-item">
-                            <a class="btn btn-xs btn-icon btn-secondary" href="#"><i
-                                    class="bi bi-linkedin lh-base"></i></a>
-                        </li>
-                    </ul>
-                </div>
-                <!-- Widget 1 END -->
-
-                <!-- Widget 2 START -->
-                <div class="col-lg-6 col-xxl-4">
-                    <div class="row g-4">
-                        <!-- Link block -->
-                        <div class="col-6">
-
-                        </div>
-
-                        <!-- Link block -->
-                        <div class="col-6">
-                        </div>
-                    </div>
-                </div>
-                <!-- Widget 2 END -->
-            </div>
-
-            <!-- Divider -->
-            <hr class="mt-xl-5 mb-0 opacity-1" />
-
-            <!-- Bottom footer -->
-            <div class="d-md-flex justify-content-between align-items-center text-center text-lg-start py-4">
-                <!-- copyright text -->
-                <div class="text-body small mb-3 mb-md-0">
-                    کلیه حقوق محفوظ است ©۱۴۰۴
-
-                </div>
-
-                <!-- Policy link -->
-                <ul class="nav d-flex justify-content-center gap-1 mb-0">
-                    <li class="nav-item">
-                        <a class="nav-link small py-0" href="#">حریم خصوصی</a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link small py-0 pe-0" href="#">قوانین و شرایط</a>
-                    </li>
-                </ul>
-            </div>
-        </div>
-    </footer>
-    <!-- =======================
-Footer END -->
 
     <!-- Back to top -->
     <div class="back-top"></div>
