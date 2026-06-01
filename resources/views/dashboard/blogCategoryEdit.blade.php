@@ -199,7 +199,6 @@
     <!-- Main JS -->
     <script src="{{ asset('/dashboard_theme') }}/assets/js/main.js"></script>
     <script>
-        $('.blog_admin').addClass('active');
         $(function() {
             var dt_without_ajax_table = $('.datatables-direct-basic');
 

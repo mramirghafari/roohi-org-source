@@ -9,6 +9,18 @@ class UserGroup extends Model
 {
     use HasFactory;
 
+    public const ASSIGNMENT_SALES_SUPPORT = 'sales_support';
+    public const ASSIGNMENT_TECHNICAL_SUPPORT = 'technical_support';
+    public const ASSIGNMENT_SALES_EXPERT = 'sales_expert';
+    public const ASSIGNMENT_SALES_MANAGER = 'sales_manager';
+
+    public const ASSIGNMENT_ROLES = [
+        self::ASSIGNMENT_SALES_SUPPORT => 'پشتیبان فروش',
+        self::ASSIGNMENT_TECHNICAL_SUPPORT => 'پشتیبان فنی',
+        self::ASSIGNMENT_SALES_EXPERT => 'کارشناس فروش',
+        self::ASSIGNMENT_SALES_MANAGER => 'مدیر فروش',
+    ];
+
     public const COMMISSION_MODE_INHERIT = 'inherit';
     public const COMMISSION_MODE_CUSTOM = 'custom';
 
@@ -72,7 +84,7 @@ class UserGroup extends Model
     {
         return $this->belongsToMany(User::class, 'user_group_support_accounts', 'user_group_id', 'support_user_id')
             ->using(UserGroupSupportAccount::class)
-            ->withPivot(['assigned_by'])
+            ->withPivot(['assigned_by', 'assignment_role'])
             ->withTimestamps();
     }
 

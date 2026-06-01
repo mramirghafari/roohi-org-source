@@ -102,10 +102,6 @@
                             </div>
                         </div>
                         <div class="col-12 col-md-10">
-@if ($Bot == 'Bot1' && Request::routeIs(['bot1.users']))
-    {{ $Users->links() }}
-@endif
-
                             <div class="card">
                         <div class="card-datatable table-responsive pt-0">
                             <table class="datatables-direct-basic table">
@@ -117,57 +113,12 @@
                                     <th>نام تلگرام</th>
                                     <th>یوزرنیم تلگرام</th>
                                     @if ($Bot == 'Bot2')
-                                    <th>موجودی ال بانک</th>
-                                    @endif
+                                    <th>موجودی ال بانک</th> @endif
                                     <th>وضعیت</th>
                                     <th>عملیات</th>
                                 </tr>
                                 </thead>
-                                <tbody>
-                                @php($x = 1)
-                                @foreach ($Users as $user)
-                                <tr>
-                                    <td><bdi>{{ $x }}</bdi></td>
-                                    <td>
-                                        @if ($user->lbankApi?->is_connected == 1)
-                                        <span class="bg-label-success rounded">
-                                            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="icon icon-tabler icons-tabler-outline icon-tabler-link"><path stroke="none" d="M0 0h24v24H0z" fill="none"/><path d="M9 15l6 -6" /><path d="M11 6l.463 -.536a5 5 0 0 1 7.071 7.072l-.534 .464" /><path d="M13 18l-.397 .534a5.068 5.068 0 0 1 -7.127 0a4.972 4.972 0 0 1 0 -7.071l.524 -.463" /></svg>
-                                        </span>
-                                        @endif
-                                        <bdi>{{ $user->nam }}</bdi></td>
-                                    <td><bdi>{{ $user->mobile }}</bdi></td>
-                                    <td><small>{{ substr($user->name, 0, 30) . ' ' . substr($user->last_name, 0, 30) }}</small></td>
-                                    <td><small><a href="https://t.me/{{ $user->username }}" target="_blank">{{ $user->username }}</a></small></td>
-                                    @if ($Bot == 'Bot2')
-                                    <td>
-                                       <span class="badge bg-label-primary me-1"> {{ $user->latestBalance ? $user->latestBalance->balance : 'سینک نشده' }}</span>
-                                    </td>
-                                    @endif
-                                    <td>
-                                        @if ($Bot == 'Bot1')
-                                        
-                                            @if ($user->status == 1)
-                                                <span class="badge bg-label-success me-1">فعال</span>
-                                            @else
-                                                <span class="badge bg-label-danger me-1">غیرفعال</span>
-                                            @endif
-
-                                        @elseif ($Bot == 'Bot2')
-                                            @if ($user->lbank_uid != null && $user->status == 1)
-                                                <span class="badge bg-label-success me-1">فعال</span>
-                                            @else
-                                                <span class="badge bg-label-danger me-1">غیرفعال</span>
-                                            @endif
-                                        @endif
-                                    </td>
-                                    @if ($Bot == 'Bot1')
-                                    <td><a href="{{ route('bot1.botUserInfo', $user->id) }}" class="btn btn-sm btn-info">مشاهده</a></td>
-                                    @elseif ($Bot == 'Bot2')
-                                        <td><a href="{{ route('bot2.botUserInfo', $user->id) }}" class="btn btn-sm btn-info">مشاهده</a></td>
-                                    @endif
-                                </tr>
-                                    @php($x++) @endforeach
-                                </tbody>
+                                <tbody></tbody>
                             </table>
                         </div>
                     </div>
@@ -239,7 +190,6 @@
         }
     </style>
     <script>
-        $('.bots').addClass('active');
         $(function() {
             var dt_without_ajax_table = $('.datatables-direct-basic');
 
@@ -248,19 +198,44 @@
                     searching: true,
                     lengthChange: true,
                     ordering: true,
+                    processing: true,
+                    serverSide: true,
+                    ajax: '{{ $botUsersAjaxUrl }}',
                     pageLength: 100,
+                    lengthMenu: [
+                        [25, 50, 100],
+                        [25, 50, 100]
+                    ],
+                    order: [],
+                    columnDefs: [{
+                        targets: '_all',
+                        orderable: false
+                    }],
+                    language: {
+                        processing: 'در حال جستجو...',
+                        search: 'جستجو:',
+                        lengthMenu: 'نمایش _MENU_ ردیف',
+                        zeroRecords: 'رکوردی پیدا نشد',
+                        info: 'نمایش _START_ تا _END_ از _TOTAL_ رکورد',
+                        infoEmpty: 'رکوردی برای نمایش وجود ندارد',
+                        infoFiltered: '(فیلتر شده از _MAX_ رکورد)',
+                        paginate: {
+                            first: 'اول',
+                            last: 'آخر',
+                            next: 'بعدی',
+                            previous: 'قبلی'
+                        }
+                    },
 
                     // ✅ فعال‌سازی دکمه‌ها
-                    dom: 'Bfltip',
-                    buttons: [{
-                        extend: 'excelHtml5',
-                        text: 'خروجی اکسل',
-                        title: 'datatable-export',
-                        exportOptions: {
-                            columns: ':visible'
-                        }
-                    }]
+                    dom: 'fltip',
+                    buttons: []
                 });
+
+                $('<div class="dt-buttons" style="padding: 10px;">' +
+                    '<a href="{{ $botUsersExportUrl }}" class="btn btn-primary">' +
+                    'خروجی اکسل' +
+                    '</a></div>').insertBefore('.dataTables_wrapper');
             }
         });
     </script>

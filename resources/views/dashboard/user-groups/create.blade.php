@@ -73,14 +73,27 @@
                                             </div>
 
                                             <div class="mb-3">
-                                                <label class="form-label">انتخاب پشتیبان‌ها (اختیاری)</label>
-                                                <select class="form-select js-select2-multi" name="support_user_ids[]"
-                                                    multiple size="6">
-                                                    @foreach ($supportUsers as $supportUser)
-                                                        <option value="{{ $supportUser->id }}">{{ $supportUser->nam }}
-                                                            - {{ $supportUser->mobile }}</option>
+                                                <label class="form-label">مسئول‌های گروه</label>
+                                                <div class="row g-3">
+                                                    @foreach ($assignmentRoles as $assignmentRole => $assignmentLabel)
+                                                        <div class="col-12 col-md-6">
+                                                            <label class="form-label">{{ $assignmentLabel }}</label>
+                                                            <select class="form-select js-select2-single"
+                                                                name="assignment_user_ids[{{ $assignmentRole }}]">
+                                                                <option value="">انتخاب نشده</option>
+                                                                @foreach ($assignmentUsers[$assignmentRole] ?? collect() as $assignmentUser)
+                                                                    <option value="{{ $assignmentUser->id }}"
+                                                                        {{ (string) old('assignment_user_ids.' . $assignmentRole) === (string) $assignmentUser->id ? 'selected' : '' }}>
+                                                                        {{ $assignmentUser->nam ?: $assignmentUser->name ?: 'کاربر #' . $assignmentUser->id }}
+                                                                        - {{ $assignmentUser->mobile }}
+                                                                    </option>
+                                                                @endforeach
+                                                            </select>
+                                                        </div>
                                                     @endforeach
-                                                </select>
+                                                </div>
+                                                <small class="text-muted d-block mt-2">هر لیست فقط کاربران دارای همان
+                                                    نقش کاربری را نمایش می‌دهد.</small>
                                             </div>
 
                                             <div class="mb-3">
@@ -192,11 +205,10 @@
     <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
     <script src="{{ asset('/dashboard_theme') }}/assets/js/main.js"></script>
     <script>
-        $('.users').addClass('active').removeClass('open');
         $('.user-groups').addClass('active').removeClass('open');
 
         $(function() {
-            $('.js-select2-multi').select2({
+            $('.js-select2-multi, .js-select2-single').select2({
                 width: '100%',
                 dir: 'rtl'
             });

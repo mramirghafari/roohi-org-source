@@ -228,8 +228,6 @@
     <script src="{{ asset('/dashboard_theme') }}/assets/vendor/libs/sweetalert2/sweetalert2.js"></script>
     <script src="{{ asset('/dashboard_theme') }}/assets/js/main.js"></script>
     <script>
-        $('.blog_admin').addClass('active');
-
         // SweetAlert برای حذف دسته بندی
         document.addEventListener('click', async (e) => {
             const deleteBtn = e.target.closest('.delete-btn');

@@ -7,6 +7,7 @@ use App\Models\Bot1;
 use App\Models\User;
 use Carbon\Carbon;
 use Hekmatinasser\Verta\Verta;
+use Illuminate\Database\Eloquent\Builder;
 
 
 
@@ -31,35 +32,88 @@ class Bot1Controller extends Controller
 
     public function users() {
 
-        $Users = Bot1::paginate(25000);
         session()->put('backlink', route('bot1.users'));
-        $Bot = "Bot1";
-        return view("dashboard.BotUsers", compact("Users","Bot"));
+        return $this->usersListView('all');
 
     }
 
     public function activeUsers() {
 
-        $Users = Bot1::where('vip', '>',0)->where('status',1)->get();
         session()->put('backlink', route('bot1.activeUsers'));
-        $Bot = "Bot1";
-        return view("dashboard.BotUsers", compact("Users","Bot"));
+        return $this->usersListView('active');
 
     }
 
     public function deactiveUsers() {
 
-        $now = Carbon::now();
-        $Users = Bot1::where('step', 3)
-        ->where('status', 0)
-        ->where('vip', '>', 0)
-        ->whereNotNull('exp_vip')
-        ->where('exp_vip', '<', Carbon::now())
-        ->get();
         session()->put('backlink', route('bot1.deactiveUsers'));
-        $Bot = "Bot1";
-        return view("dashboard.BotUsers", compact("Users","Bot"));
+        return $this->usersListView('deactive');
 
+    }
+
+    public function data(Request $request)
+    {
+        $scope = (string) $request->query('scope', 'all');
+        $baseQuery = $this->usersScopedQuery($scope);
+        $total = (clone $baseQuery)->count();
+        $filteredQuery = $this->applyUsersDataSearch((clone $baseQuery), trim((string) data_get($request->input('search'), 'value', '')));
+        $filtered = (clone $filteredQuery)->count();
+        $start = max(0, (int) $request->input('start', 0));
+        $length = (int) $request->input('length', 100);
+        $length = $length > 0 ? min($length, 100) : 100;
+
+        $users = $filteredQuery
+            ->latest('id')
+            ->skip($start)
+            ->take($length)
+            ->get();
+
+        $rows = $users->map(function (Bot1 $user, int $index) use ($start) {
+            return [
+                '<bdi>' . number_format($start + $index + 1) . '</bdi>',
+                '<bdi>' . e((string) $user->nam) . '</bdi>',
+                '<bdi>' . e((string) $user->mobile) . '</bdi>',
+                '<small>' . e(trim(substr((string) $user->name, 0, 30) . ' ' . substr((string) $user->last_name, 0, 30))) . '</small>',
+                $user->username ? '<small><a href="https://t.me/' . e((string) $user->username) . '" target="_blank">' . e((string) $user->username) . '</a></small>' : '<small>-</small>',
+                (int) $user->status === 1 ? '<span class="badge bg-label-success me-1">فعال</span>' : '<span class="badge bg-label-danger me-1">غیرفعال</span>',
+                '<a href="' . route('bot1.botUserInfo', $user->id) . '" class="btn btn-sm btn-info">مشاهده</a>',
+            ];
+        })->values();
+
+        return response()->json([
+            'draw' => (int) $request->input('draw', 0),
+            'recordsTotal' => $total,
+            'recordsFiltered' => $filtered,
+            'data' => $rows,
+        ]);
+    }
+
+    public function export(Request $request)
+    {
+        $scope = (string) $request->query('scope', 'all');
+        $fileName = 'bot1-users-' . $scope . '-' . now()->format('Ymd-His') . '.csv';
+
+        return response()->streamDownload(function () use ($scope) {
+            $handle = fopen('php://output', 'w');
+            fwrite($handle, "\xEF\xBB\xBF");
+            fputcsv($handle, ['ردیف', 'نام کاربر', 'شماره موبایل', 'نام تلگرام', 'یوزرنیم تلگرام', 'وضعیت']);
+
+            $row = 1;
+            $this->usersScopedQuery($scope)->chunkById(500, function ($users) use ($handle, &$row) {
+                foreach ($users as $user) {
+                    fputcsv($handle, [
+                        $row++,
+                        $user->nam,
+                        $user->mobile,
+                        trim($user->name . ' ' . $user->last_name),
+                        $user->username,
+                        (int) $user->status === 1 ? 'فعال' : 'غیرفعال',
+                    ]);
+                }
+            });
+
+            fclose($handle);
+        }, $fileName, ['Content-Type' => 'text/csv; charset=UTF-8']);
     }
 
     public function botUserInfo(Bot1 $user) {
@@ -67,6 +121,50 @@ class Bot1Controller extends Controller
         $SiteUser = User::where('mobile',$user->mobile)->first();
         return view("dashboard.BotUserInfo", compact("user", "SiteUser"));
 
+    }
+
+    private function usersListView(string $scope)
+    {
+        $Bot = "Bot1";
+        $botUsersAjaxUrl = route('bot1.users.data', ['scope' => $scope]);
+        $botUsersExportUrl = route('bot1.users.export', ['scope' => $scope]);
+
+        return view("dashboard.BotUsers", compact("Bot", "botUsersAjaxUrl", "botUsersExportUrl"));
+    }
+
+    private function usersScopedQuery(string $scope): Builder
+    {
+        $query = Bot1::query();
+
+        if ($scope === 'active') {
+            return $query->where('vip', '>', 0)->where('status', 1);
+        }
+
+        if ($scope === 'deactive') {
+            return $query->where('step', 3)
+                ->where('status', 0)
+                ->where('vip', '>', 0)
+                ->whereNotNull('exp_vip')
+                ->where('exp_vip', '<', Carbon::now());
+        }
+
+        return $query;
+    }
+
+    private function applyUsersDataSearch(Builder $query, string $search): Builder
+    {
+        if ($search === '') {
+            return $query;
+        }
+
+        return $query->where(function (Builder $searchQuery) use ($search) {
+            $searchQuery->where('nam', 'like', '%' . $search . '%')
+                ->orWhere('name', 'like', '%' . $search . '%')
+                ->orWhere('last_name', 'like', '%' . $search . '%')
+                ->orWhere('username', 'like', '%' . $search . '%')
+                ->orWhere('mobile', 'like', '%' . $search . '%')
+                ->orWhere('user_id', 'like', '%' . $search . '%');
+        });
     }
 
     public function UpdateUserInfo(Request $request, Bot1 $user) {

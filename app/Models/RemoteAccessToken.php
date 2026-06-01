@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Builder;
+use Throwable;
 
 class RemoteAccessToken extends Model
 {
@@ -29,6 +30,35 @@ class RemoteAccessToken extends Model
         'password' => 'encrypted',
         'meta' => 'array',
     ];
+
+    public function passwordForForm(?string $fallback = null): ?string
+    {
+        $rawPassword = $this->getRawOriginal('password');
+
+        if ($rawPassword === null || $rawPassword === '') {
+            return $fallback;
+        }
+
+        if (!$this->looksEncrypted($rawPassword)) {
+            return $rawPassword;
+        }
+
+        try {
+            return decrypt($rawPassword);
+        } catch (Throwable) {
+            return $fallback;
+        }
+    }
+
+    private function looksEncrypted(string $value): bool
+    {
+        $decoded = json_decode(base64_decode($value, true) ?: '', true);
+
+        return is_array($decoded)
+            && array_key_exists('iv', $decoded)
+            && array_key_exists('value', $decoded)
+            && array_key_exists('mac', $decoded);
+    }
 
     public function consume(): void
     {

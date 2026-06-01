@@ -154,7 +154,6 @@
         <script src="{{ asset('/dashboard_theme') }}/assets/js/main.js"></script>
 
         <script>
-            $('.users').addClass('active open');
             $('.user-camps').addClass('active');
 
             $(function() {

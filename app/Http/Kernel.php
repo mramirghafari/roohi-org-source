@@ -68,6 +68,8 @@ class Kernel extends HttpKernel
         'checkAdmin' => \App\Http\Middleware\CheckAdminMiddleware::class,
         'checkVip' => \App\Http\Middleware\CheckVipMiddleware::class,
         'checkSupport' => \App\Http\Middleware\CheckSupportMiddleware::class,
+        'checkSalesTeam' => \App\Http\Middleware\CheckSalesTeamMiddleware::class,
+        'audit.page' => \App\Http\Middleware\LogAuthenticatedPageVisit::class,
 
     ];
 }

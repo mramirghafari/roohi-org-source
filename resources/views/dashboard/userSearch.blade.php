@@ -52,8 +52,7 @@
                     <div class="container-xxl flex-grow-1 container-p-y">
                         <div class="row">
                             <div class="col-12">
-                                <form method="POST" action="{{ route('userSearch') }}">
-                                    @csrf
+                                <form method="GET" action="{{ route('users.search') }}">
                                     <div class="card">
                                         <div
                                             class="card-header sticky-element bg-label-secondary d-flex justify-content-sm-between align-items-sm-center flex-column flex-sm-row">
@@ -63,6 +62,10 @@
                                             </div>
                                         </div>
                                         <div class="card-body">
+                                            @if (!empty($isSalesTeamScope))
+                                                <div class="alert alert-info mt-3">جستجو فقط بین کاربران گروه‌های اختصاص
+                                                    داده‌شده به شما انجام می‌شود.</div>
+                                            @endif
                                             <div class="row">
                                                 <div class="col-lg-8 mx-auto">
 
@@ -180,9 +183,7 @@
     <script src="{{ asset('/dashboard_theme') }}/assets/js/main.js"></script>
     <!-- Page JS -->
     <script src="{{ asset('/dashboard_theme') }}/assets/js/form-layouts.js"></script>
-    <script>
-        $('.users').addClass('active');
-    </script>
+    <script></script>
 </body>
 
 </html>

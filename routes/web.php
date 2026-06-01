@@ -3,8 +3,11 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Http\Request;
 use App\Http\Controllers\Admin\RemoteBrowserAdminController;
+use App\Http\Controllers\Admin\AuditLogController;
 use App\Http\Controllers\Admin\UserController;
 use App\Http\Controllers\Admin\ExportController;
+use App\Http\Controllers\Admin\ManagerController;
+use App\Http\Controllers\Admin\SalesTeamDashboardController;
 use App\Http\Controllers\RemoteAccessController;
 use App\Http\Controllers\LbankApiController;
 use App\Http\Controllers\Admin\BlogCategoryController;
@@ -17,6 +20,9 @@ use App\Http\Controllers\SubscriptionPaymentController;
 use App\Http\Controllers\Admin\SupportTicketController;
 use App\Http\Controllers\Admin\SupportAccessController;
 use App\Http\Controllers\Admin\UserGroupController;
+use App\Http\Controllers\Admin\UserRoleController;
+use App\Http\Controllers\Admin\SubscriptionPlanController;
+use App\Http\Controllers\Admin\SubscriptionPaymentReviewController;
 use App\Http\Controllers\Admin\SettingController;
 use App\Http\Controllers\MtWebProxyController;
 
@@ -52,6 +58,9 @@ Route::get('/ref/{code}', function ($code) {
 
 
 Route::get('/home', [App\Http\Controllers\HomeController::class, 'index'])->name('home');
+Route::get('/signals/{photo}', [App\Http\Controllers\SignalController::class, 'signalPhoto'])
+    ->where('photo', '[A-Za-z0-9\-]+\.webp')
+    ->name('signals.photo');
 Route::get('/learnblog', [BlogPostController::class, 'homeBlog'])->name('blog');
 Route::get('/catblog/{cat}', [BlogPostController::class, 'homeCatBlog'])->name('catblog');
 Route::get('/learnblog/{slug}', [BlogPostController::class, 'homeSingleBlog'])->name('homeSingleBlog');
@@ -109,7 +118,7 @@ Route::get('/remote/{instance}', [RemoteAccessController::class, 'remoteViewer']
 Route::get('/subscription/payment/callback', [SubscriptionPaymentController::class, 'callback'])->name('subscription.payment.callback');
 
 
-Route::group(['middleware' => ['auth']], function () {
+Route::group(['middleware' => ['auth', 'audit.page']], function () {
     Route::get('/dashboard', [App\Http\Controllers\DashboardController::class, 'dashboard'])->name('dashboard');
     Route::get('/profile', [App\Http\Controllers\DashboardController::class, 'profile'])->name('dashboard.profile');
     Route::post('/profile/update', [App\Http\Controllers\DashboardController::class, 'update_profile'])->name('dashboard.profile.update');
@@ -146,6 +155,10 @@ Route::group(['middleware' => ['auth']], function () {
     Route::post('/wallet/swap', [WalletController::class, 'swap'])->name('wallet.swap');
     Route::post('/wallet/operation', [WalletController::class, 'operation'])->name('wallet.operation');
 
+    Route::group(['middleware' => ['checkSalesTeam']], function () {
+        Route::get('/sales-team/dashboard', [SalesTeamDashboardController::class, 'index'])->name('sales-team.dashboard');
+    });
+
     Route::group(['middleware' => ['checkSupport']], function () {
         Route::get('/support/tickets', [SupportTicketController::class, 'index'])->name('support.tickets.index');
         Route::get('/support/tickets/{ticket}', [SupportTicketController::class, 'show'])->name('support.tickets.show');
@@ -169,6 +182,8 @@ Route::group(['middleware' => ['auth']], function () {
         Route::get('/admin/bot1/users', [App\Http\Controllers\Bot1Controller::class, 'users'])->name('bot1.users');
         Route::get('/admin/bot1/activeUsers', [App\Http\Controllers\Bot1Controller::class, 'activeUsers'])->name('bot1.activeUsers');
         Route::get('/admin/bot1/deactiveUsers', [App\Http\Controllers\Bot1Controller::class, 'deactiveUsers'])->name('bot1.deactiveUsers');
+        Route::get('/admin/bot1/users-data', [App\Http\Controllers\Bot1Controller::class, 'data'])->name('bot1.users.data');
+        Route::get('/admin/bot1/users-export', [App\Http\Controllers\Bot1Controller::class, 'export'])->name('bot1.users.export');
         Route::get('/admin/bot1/botUserInfo/{user}', [App\Http\Controllers\Bot1Controller::class, 'botUserInfo'])->name('bot1.botUserInfo');
         Route::post('/admin/bot1/UpdateUserInfo/{user}', [App\Http\Controllers\Bot1Controller::class, 'UpdateUserInfo'])->name('bot1.UpdateUserInfo');
 
@@ -176,6 +191,8 @@ Route::group(['middleware' => ['auth']], function () {
         Route::get('/admin/bot2/users', [App\Http\Controllers\Bot2Controller::class, 'users'])->name('bot2.users');
         Route::get('/admin/bot2/activeUsers', [App\Http\Controllers\Bot2Controller::class, 'activeUsers'])->name('bot2.activeUsers');
         Route::get('/admin/bot2/deactiveUsers', [App\Http\Controllers\Bot2Controller::class, 'deactiveUsers'])->name('bot2.deactiveUsers');
+        Route::get('/admin/bot2/users-data', [App\Http\Controllers\Bot2Controller::class, 'data'])->name('bot2.users.data');
+        Route::get('/admin/bot2/users-export', [App\Http\Controllers\Bot2Controller::class, 'export'])->name('bot2.users.export');
         Route::get('/admin/bot2/botUserInfo/{user}', [App\Http\Controllers\Bot2Controller::class, 'botUserInfo'])->name('bot2.botUserInfo');
         Route::post('/admin/bot2/UpdateUserInfo/{user}', [App\Http\Controllers\Bot2Controller::class, 'UpdateUserInfo'])->name('bot2.UpdateUserInfo');
 
@@ -190,9 +207,11 @@ Route::group(['middleware' => ['auth']], function () {
         Route::get('/admin/users/activeUsers', [UserController::class, 'activeUsers'])->name('users.activeUsers');
         Route::get('/admin/users/deactiveUsers', [UserController::class, 'deactiveUsers'])->name('users.deactiveUsers');
         Route::get('/admin/users/leftUsers', [UserController::class, 'leftUsers'])->name('users.leftUsers');
+        Route::get('/admin/users/data', [UserController::class, 'data'])->name('users.data');
         Route::get('/admin/users/search', [UserController::class, 'search'])->name('users.search');
         Route::get('/admin/user-camps', [UserController::class, 'userCamps'])->name('users.camps');
         Route::get('/admin/user/{userId}', [UserController::class, 'edit'])->name('users.detail');
+        Route::post('/admin/users/bulk-groups', [UserController::class, 'bulkAddToGroups'])->name('users.bulkGroups');
         Route::post('/admin/removeUserUid/{user}', [UserController::class, 'removeUserUid'])->name('users.removeUserUid');
         Route::post('/admin/UpdateUserInfo/{user}', [UserController::class, 'update'])->name('user.UpdateUserInfo');
         Route::post('/admin/user/updatePermission/{user}', [UserController::class, 'updatePermission'])->name('user.updatePermission');
@@ -209,6 +228,16 @@ Route::group(['middleware' => ['auth']], function () {
 
         Route::get('/admin/users/export/excel', [ExportController::class, 'usersExcel'])->name('users.export.excel');
 
+        Route::get('/admin/managers', [ManagerController::class, 'index'])->name('managers.index');
+        Route::post('/admin/managers/assign', [ManagerController::class, 'assign'])->name('managers.assign');
+
+        Route::get('/admin/user-roles', [UserRoleController::class, 'index'])->name('user-roles.index');
+        Route::post('/admin/user-roles', [UserRoleController::class, 'store'])->name('user-roles.store');
+        Route::put('/admin/user-roles/{role}', [UserRoleController::class, 'update'])->name('user-roles.update');
+        Route::delete('/admin/user-roles/{role}', [UserRoleController::class, 'destroy'])->name('user-roles.destroy');
+
+        Route::get('/admin/audit-logs', [AuditLogController::class, 'index'])->name('audit-logs.index');
+
         Route::get('/admin/user-groups', [UserGroupController::class, 'index'])->name('user-groups.index');
         Route::get('/admin/user-groups/create', [UserGroupController::class, 'create'])->name('user-groups.create');
         Route::post('/admin/user-groups', [UserGroupController::class, 'store'])->name('user-groups.store');
@@ -222,6 +251,18 @@ Route::group(['middleware' => ['auth']], function () {
 
         Route::post('/admin/user/{user}/groups', [UserController::class, 'addUserToGroup'])->name('user.groups.add');
         Route::post('/admin/user/{user}/groups/{group}/remove', [UserController::class, 'removeUserFromGroup'])->name('user.groups.remove');
+
+        Route::get('/admin/subscription-plans', [SubscriptionPlanController::class, 'index'])->name('subscription-plans.index');
+        Route::get('/admin/subscription-plans/create', [SubscriptionPlanController::class, 'create'])->name('subscription-plans.create');
+        Route::post('/admin/subscription-plans', [SubscriptionPlanController::class, 'store'])->name('subscription-plans.store');
+        Route::get('/admin/subscription-plans/{subscriptionPlan}/edit', [SubscriptionPlanController::class, 'edit'])->name('subscription-plans.edit');
+        Route::put('/admin/subscription-plans/{subscriptionPlan}', [SubscriptionPlanController::class, 'update'])->name('subscription-plans.update');
+        Route::delete('/admin/subscription-plans/{subscriptionPlan}', [SubscriptionPlanController::class, 'destroy'])->name('subscription-plans.destroy');
+
+        Route::get('/admin/subscription-payments', [SubscriptionPaymentReviewController::class, 'index'])->name('subscription-payments.index');
+        Route::post('/admin/subscription-payments/{transaction}/approve', [SubscriptionPaymentReviewController::class, 'approve'])->name('subscription-payments.approve');
+        Route::post('/admin/subscription-payments/{transaction}/reject', [SubscriptionPaymentReviewController::class, 'reject'])->name('subscription-payments.reject');
+        Route::get('/admin/subscription-payments/{transaction}/receipt', [SubscriptionPaymentReviewController::class, 'receipt'])->name('subscription-payments.receipt');
 
         Route::get('/admin/payment-campaigns', [App\Http\Controllers\PaymentCampaignController::class, 'index'])->name('payment-campaigns.index');
         Route::get('/admin/payment-campaigns/create', [App\Http\Controllers\PaymentCampaignController::class, 'create'])->name('payment-campaigns.create');

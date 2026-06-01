@@ -27,6 +27,8 @@ use App\Models\WalletTransaction;
 use App\Models\UserGroup;
 use App\Models\UserGroupMember;
 use App\Models\UserGroupSupportAccount;
+use App\Models\UserRole;
+use App\Models\AuditLog;
 use App\Models\RemoteAccessToken;
 
 
@@ -104,6 +106,35 @@ class User extends Authenticatable
     public function bot2()
     {
         return $this->hasOne(Bot2::class, 'mobile', 'mobile');
+    }
+
+    public function roles()
+    {
+        return $this->belongsToMany(UserRole::class, 'user_role_user', 'user_id', 'user_role_id')
+            ->withPivot(['assigned_by', 'assigned_at'])
+            ->withTimestamps();
+    }
+
+    public function activeRoles()
+    {
+        return $this->roles()->where('user_roles.is_active', true);
+    }
+
+    public function hasRole(string $slug): bool
+    {
+        return $this->activeRoles()->where('slug', $slug)->exists();
+    }
+
+    public function hasPermission(string $permission): bool
+    {
+        return $this->activeRoles()
+            ->whereJsonContains('permissions', $permission)
+            ->exists();
+    }
+
+    public function auditLogs()
+    {
+        return $this->hasMany(AuditLog::class)->latest('occurred_at');
     }
 
     /*
@@ -346,7 +377,7 @@ class User extends Authenticatable
     {
         return $this->belongsToMany(UserGroup::class, 'user_group_support_accounts', 'support_user_id', 'user_group_id')
             ->using(UserGroupSupportAccount::class)
-            ->withPivot(['assigned_by'])
+            ->withPivot(['assigned_by', 'assignment_role'])
             ->withTimestamps();
     }
 

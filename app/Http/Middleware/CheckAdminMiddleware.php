@@ -10,7 +10,29 @@ class CheckAdminMiddleware   // <-- این باید تصحیح شود
 {
     public function handle($request, Closure $next)
     {
-        if (auth()->user()->isAdmin != 1) {
+        $user = auth()->user();
+
+        if ((int) $user->isAdmin === 1) {
+            return $next($request);
+        }
+
+        $salesTeamRoutes = [
+            'users.index',
+            'users.all',
+            'users.activeUsers',
+            'users.deactiveUsers',
+            'users.leftUsers',
+            'users.data',
+            'users.search',
+            'users.detail',
+            'users.bulkGroups',
+        ];
+
+        if ($request->routeIs(...$salesTeamRoutes) && ($user->supportGroups()->exists() || $user->hasRole('sales-manager') || $user->hasRole('sales-expert'))) {
+            return $next($request);
+        }
+
+        if ((int) $user->isAdmin !== 1) {
             return redirect()->route('dashboard');
         }
 

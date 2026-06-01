@@ -33,15 +33,24 @@
     <style>
         .signal-section {
             display: flex;
-            flex-direction: row;
+            flex-direction: column;
             background: #1e1e2f;
             color: #fff;
-            padding: 20px;
-            border-radius: 12px;
+            padding: 5px 20px;
+            border-radius: 15px;
+            width: min(100%, 25rem);
             max-width: 25rem;
             margin: 30px auto;
             box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
             font-family: sans-serif;
+            box-sizing: border-box;
+            overflow: hidden;
+        }
+
+        .signal-section>div,
+        .signal-info {
+            width: 100%;
+            min-width: 0;
         }
 
         .signal-header {
@@ -49,6 +58,12 @@
             justify-content: space-between;
             align-items: center;
             flex-direction: column;
+        }
+
+        .signal-header h4 {
+            margin-bottom: 2px;
+            font-size: 18px;
+            color: #758bff !important;
         }
 
         .signal-status {
@@ -66,11 +81,80 @@
         }
 
         .signal-info p {
-            margin: 6px 0;
+            margin: 3px 0;
+            overflow-wrap: anywhere;
+            font-family: font-regular, "tahoma", serif;
+            line-height: 25px !important;
+        }
+
+        .signal-section .alert {
+            width: 100%;
+            margin-bottom: 0;
+        }
+
+        .signal-section h4 {
+            font-size: 16px;
+            margin-bottom: 4px
+        }
+
+        .entry-price-row {
+            display: flex;
+            align-items: center;
+            justify-content: flex-start;
+            gap: 5px;
+            width: 100%;
+            direction: ltr;
+            text-align: left;
+            unicode-bidi: isolate;
+        }
+
+        .entry-price-label {
+            flex: 0 0 auto;
+            white-space: nowrap;
+        }
+
+        .entry-price-value {
+            min-width: 0;
+            text-align: left;
+            overflow-wrap: anywhere;
+            unicode-bidi: plaintext;
+        }
+
+        .entry-price-icon {
+            flex: 0 0 auto;
+        }
+
+        .signal-meta {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            width: fit-content;
+            margin-top: 10px;
+            margin-right: auto;
+            margin-left: 0 !important;
+            color: rgba(255, 255, 255, 0.72);
+            direction: ltr;
+            font-size: 0.8125rem;
         }
 
         canvas {
             margin-top: 20px;
+        }
+
+        @media (max-width: 767.98px) {
+            .channel-page-container {
+                padding-bottom: 0 !important;
+                padding-block-end: 0 !important;
+            }
+
+            .app-chat .chat-history-body {
+                padding-bottom: 0 !important;
+                padding-block-end: 0 !important;
+            }
+
+            .entry-price-value {
+                font-size: 13px;
+            }
         }
     </style>
 
@@ -98,13 +182,118 @@
         }
 
         /* Skeleton loading animation for lazy images */
-        .lazy-image {
-            display: block;
+        .signal-photo-frame {
+            position: relative;
+            display: flex;
+            align-items: center;
+            justify-content: center;
             width: 100%;
-            height: 675px;
-            background: linear-gradient(90deg, #2a2a3e 0%, #3a3a4e 50%, #2a2a3e 100%);
+            height: 220px;
+            max-height: 500px !important;
+            margin-bottom: 16px;
+            overflow: hidden;
+            border-radius: 15px !important;
+            background: #050505;
+            cursor: zoom-in;
+            isolation: isolate;
+        }
+
+        .signal-photo-frame::before {
+            content: "";
+            position: absolute;
+            inset: 0;
+            z-index: 0;
+            background: linear-gradient(90deg, #11131f 0%, #2e3348 50%, #11131f 100%);
             background-size: 200% 100%;
             animation: skeleton-loading 1.5s infinite;
+        }
+
+        .signal-photo-frame.is-loaded::before {
+            opacity: 0;
+            animation: none;
+        }
+
+        .signal-photo-frame img {
+            position: relative;
+            z-index: 1;
+            display: block;
+            width: 100%;
+            height: 100%;
+            max-height: 500px !important;
+            border-radius: 15px !important;
+            object-fit: contain;
+            background: #050505;
+            opacity: 0;
+            filter: blur(12px);
+            transform: scale(1.01);
+            transition: opacity 0.25s ease, filter 0.25s ease, transform 0.25s ease;
+        }
+
+        .signal-photo-frame.is-loaded img {
+            opacity: 1;
+            filter: none;
+            transform: none;
+        }
+
+        .signal-photo-modal {
+            position: fixed;
+            inset: 0;
+            z-index: 10990;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            padding: 18px;
+            background: rgba(0, 0, 0, 0.92);
+        }
+
+        .signal-photo-modal.is-open {
+            display: flex;
+        }
+
+        .signal-photo-modal img {
+            display: block;
+            width: auto;
+            max-width: 96vw;
+            height: auto;
+            max-height: 92vh;
+            object-fit: contain;
+            border-radius: 15px;
+            background: #000;
+            box-shadow: 0 18px 60px rgba(0, 0, 0, 0.55);
+            cursor: zoom-out;
+        }
+
+        .signal-photo-modal__close {
+            position: fixed;
+            top: 16px;
+            left: 16px;
+            z-index: 1;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 42px;
+            height: 42px;
+            border: 0;
+            border-radius: 50%;
+            color: #fff;
+            background: rgba(255, 255, 255, 0.14);
+            cursor: pointer;
+        }
+
+        .signal-photo-modal__close:hover {
+            background: rgba(255, 255, 255, 0.22);
+        }
+
+        @media (max-width: 575.98px) {
+            .signal-photo-modal__close {
+                display: none;
+            }
+        }
+
+        @media (min-width: 768px) {
+            .signal-photo-frame {
+                height: 220px;
+            }
         }
 
         @keyframes skeleton-loading {
@@ -117,17 +306,11 @@
             }
         }
 
-        /* Once image is loaded, remove the animation */
-        .lazy-image[src*="/signals/"] {
-            animation: none;
-            background: none;
-        }
-
         /* Scroll to bottom button */
         .scroll-to-bottom-btn {
             position: fixed;
             bottom: 65px;
-            left: 30px;
+            right: 30px;
             width: 50px;
             height: 50px;
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
@@ -184,7 +367,7 @@
                     @include('dashboard.sections.aside')
                     <!-- / Menu -->
                     <!-- Content -->
-                    <div class="container-xxl flex-grow-1 container-p-y">
+                    <div class="container-xxl flex-grow-1 container-p-y channel-page-container pb-0 pb-md-4">
                         <div class="app-chat card overflow-hidden">
                             <div class="row g-0">
                                 <!-- Sidebar Left -->
@@ -248,10 +431,15 @@
                                                                         </div>
                                                                         <div class="signal-info">
                                                                             @if ($signal->photo != null)
-                                                                                <img class="col-12 lazy-image"
-                                                                                    data-src="{{ asset('/signals') }}/{{ $signal->photo }}"
-                                                                                    src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7"
-                                                                                    alt="signal-{{ $signal->tracking_code }}">
+                                                                                <div class="signal-photo-frame"
+                                                                                    role="button" tabindex="0"
+                                                                                    aria-label="نمایش تصویر سیگنال">
+                                                                                    <img class="lazy-image"
+                                                                                        data-src="{{ asset('/signals') }}/{{ $signal->photo }}"
+                                                                                        data-full-src="{{ asset('/signals') }}/{{ $signal->photo }}"
+                                                                                        src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7"
+                                                                                        alt="signal-{{ $signal->tracking_code }}">
+                                                                                </div>
                                                                             @endif
                                                                             <div class="flex-lg-row col-12">
 
@@ -268,15 +456,13 @@
                                                                                 <div
                                                                                     style="display: flex;flex-direction: column;align-items: end;">
                                                                                     @if ($signal->entryPrice1 != null)
-                                                                                        <p>Entry price 1 :
-                                                                                            <strong>
-                                                                                                {{ $signal->entryPrice1 }}</strong>
+                                                                                        <p class="entry-price-row">
                                                                                             <svg xmlns="http://www.w3.org/2000/svg"
                                                                                                 width="20"
                                                                                                 height="20"
                                                                                                 viewBox="0 0 24 24"
                                                                                                 fill="currentColor"
-                                                                                                class="icon icon-tabler icons-tabler-filled icon-tabler-chart-bubble">
+                                                                                                class="entry-price-icon icon icon-tabler icons-tabler-filled icon-tabler-chart-bubble">
                                                                                                 <path stroke="none"
                                                                                                     d="M0 0h24v24H0z"
                                                                                                     fill="none" />
@@ -287,18 +473,19 @@
                                                                                                 <path
                                                                                                     d="M14.5 2a5.5 5.5 0 1 1 -5.496 5.721l-.004 -.221l.004 -.221a5.5 5.5 0 0 1 5.496 -5.279z" />
                                                                                             </svg>
+                                                                                            <span class="entry-price-label">Entry price 1 :</span>
+                                                                                            <strong class="entry-price-value"
+                                                                                                dir="auto">{{ $signal->entryPrice1 }}</strong>
                                                                                         </p>
                                                                                     @endif
                                                                                     @if ($signal->entryPrice2 != null)
-                                                                                        <p>Entry price 2 :
-                                                                                            <strong>
-                                                                                                {{ $signal->entryPrice2 }}</strong>
+                                                                                        <p class="entry-price-row">
                                                                                             <svg xmlns="http://www.w3.org/2000/svg"
                                                                                                 width="20"
                                                                                                 height="20"
                                                                                                 viewBox="0 0 24 24"
                                                                                                 fill="currentColor"
-                                                                                                class="icon icon-tabler icons-tabler-filled icon-tabler-chart-bubble">
+                                                                                                class="entry-price-icon icon icon-tabler icons-tabler-filled icon-tabler-chart-bubble">
                                                                                                 <path stroke="none"
                                                                                                     d="M0 0h24v24H0z"
                                                                                                     fill="none" />
@@ -309,6 +496,9 @@
                                                                                                 <path
                                                                                                     d="M14.5 2a5.5 5.5 0 1 1 -5.496 5.721l-.004 -.221l.004 -.221a5.5 5.5 0 0 1 5.496 -5.279z" />
                                                                                             </svg>
+                                                                                            <span class="entry-price-label">Entry price 2 :</span>
+                                                                                            <strong class="entry-price-value"
+                                                                                                dir="auto">{{ $signal->entryPrice2 }}</strong>
                                                                                         </p>
                                                                                     @endif
                                                                                     @if ($signal->target1 != null)
@@ -421,17 +611,17 @@
                                                                             </p>
                                                                         @endif
 
+                                                                        <div class="signal-meta">
+                                                                            <small>{{ verta($signal->created_at)->format('m/d H:i:s') }}</small>
+                                                                            <i
+                                                                                class="ti ti-checks ti-xs text-success"></i>
+                                                                        </div>
 
 
                                                                     </div>
 
 
 
-                                                                </div>
-                                                                <div class="text-end text-muted mt-1">
-                                                                    <i
-                                                                        class="ti ti-checks ti-xs me-1 text-success"></i>
-                                                                    <small>{{ verta($signal->created_at)->format('m/d H:i:s') }}</small>
                                                                 </div>
                                                             </div>
 
@@ -470,6 +660,13 @@
     <!-- Drag Target Area To SlideIn Menu On Small Screens -->
     <div class="drag-target"></div>
     <!--/ Layout wrapper -->
+
+    <div class="signal-photo-modal" id="signalPhotoModal" aria-hidden="true">
+        <button class="signal-photo-modal__close" id="signalPhotoModalClose" type="button" aria-label="بستن تصویر">
+            <i class="ti ti-x"></i>
+        </button>
+        <img id="signalPhotoModalImage" src="" alt="">
+    </div>
 
     <!-- Core JS -->
     <!-- build:js assets/vendor/js/core.js -->
@@ -658,24 +855,38 @@
             }
 
             // Lazy load images using Intersection Observer
+            function markSignalImageLoaded(img) {
+                const frame = img.closest('.signal-photo-frame');
+                if (frame) {
+                    frame.classList.add('is-loaded');
+                }
+                img.classList.remove('lazy-image');
+            }
+
+            function loadSignalImage(img, observer) {
+                const dataSrc = img.getAttribute('data-src');
+                if (!dataSrc) return;
+
+                img.onload = function() {
+                    markSignalImageLoaded(img);
+                };
+                img.onerror = function() {
+                    markSignalImageLoaded(img);
+                };
+                img.src = dataSrc;
+                img.removeAttribute('data-src');
+
+                if (observer) {
+                    observer.unobserve(img);
+                }
+            }
+
             if (window.IntersectionObserver) {
                 const lazyImages = document.querySelectorAll('img.lazy-image');
                 const imageObserver = new IntersectionObserver(function(entries) {
                     entries.forEach(function(entry) {
                         if (entry.isIntersecting) {
-                            const img = entry.target;
-                            const dataSrc = img.getAttribute('data-src');
-                            if (dataSrc) {
-                                img.onload = function() {
-                                    img.classList.remove('lazy-image');
-                                };
-                                img.onerror = function() {
-                                    img.classList.remove('lazy-image');
-                                };
-                                img.src = dataSrc;
-                                img.removeAttribute('data-src');
-                                imageObserver.unobserve(img);
-                            }
+                            loadSignalImage(entry.target, imageObserver);
                         }
                     });
                 }, {
@@ -685,6 +896,79 @@
                 lazyImages.forEach(function(img) {
                     imageObserver.observe(img);
                 });
+            } else {
+                document.querySelectorAll('img.lazy-image').forEach(function(img) {
+                    loadSignalImage(img, null);
+                });
+            }
+
+            const photoModal = document.getElementById('signalPhotoModal');
+            const photoModalImage = document.getElementById('signalPhotoModalImage');
+            const photoModalClose = document.getElementById('signalPhotoModalClose');
+            let previousBodyOverflow = '';
+
+            function openSignalPhotoModal(src, alt) {
+                if (!photoModal || !photoModalImage || !src) return;
+
+                previousBodyOverflow = document.body.style.overflow;
+                photoModalImage.src = src;
+                photoModalImage.alt = alt || '';
+                photoModal.classList.add('is-open');
+                photoModal.setAttribute('aria-hidden', 'false');
+                document.body.style.overflow = 'hidden';
+            }
+
+            function closeSignalPhotoModal() {
+                if (!photoModal || !photoModalImage) return;
+
+                photoModal.classList.remove('is-open');
+                photoModal.setAttribute('aria-hidden', 'true');
+                photoModalImage.src = '';
+                document.body.style.overflow = previousBodyOverflow;
+            }
+
+            document.addEventListener('click', function(event) {
+                const frame = event.target.closest && event.target.closest('.signal-photo-frame');
+                if (!frame) return;
+
+                const img = frame.querySelector('img');
+                if (!img) return;
+
+                openSignalPhotoModal(
+                    img.getAttribute('data-full-src') || img.getAttribute('data-src') || img.currentSrc ||
+                    img.src,
+                    img.getAttribute('alt')
+                );
+            });
+
+            document.addEventListener('keydown', function(event) {
+                if (event.key === 'Escape' && photoModal && photoModal.classList.contains('is-open')) {
+                    closeSignalPhotoModal();
+                    return;
+                }
+
+                if ((event.key === 'Enter' || event.key === ' ') && event.target.classList.contains(
+                        'signal-photo-frame')) {
+                    event.preventDefault();
+                    const img = event.target.querySelector('img');
+                    if (img) {
+                        openSignalPhotoModal(
+                            img.getAttribute('data-full-src') || img.getAttribute('data-src') || img
+                            .currentSrc || img.src,
+                            img.getAttribute('alt')
+                        );
+                    }
+                }
+            });
+
+            if (photoModal) {
+                photoModal.addEventListener('click', function(event) {
+                    closeSignalPhotoModal();
+                });
+            }
+
+            if (photoModalClose) {
+                photoModalClose.addEventListener('click', closeSignalPhotoModal);
             }
 
             // Scroll to bottom button functionality

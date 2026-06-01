@@ -30,14 +30,9 @@ class UserGroupController extends Controller
 
     public function create()
     {
-        $supportUsers = User::query()
-            ->select('id', 'nam', 'mobile', 'is_support', 'isAdmin')
-            ->where(function ($query) {
-                $query->where('is_support', 1)->orWhere('isAdmin', 1);
-            })
-            ->orderByDesc('id')
-            ->limit(1000)
-            ->get();
+        $assignmentRoles = UserGroup::ASSIGNMENT_ROLES;
+        $assignmentUsers = $this->assignmentUserOptions();
+        $supportUsers = $assignmentUsers[UserGroup::ASSIGNMENT_TECHNICAL_SUPPORT];
 
         $users = User::query()
             ->select('id', 'nam', 'mobile')
@@ -45,7 +40,7 @@ class UserGroupController extends Controller
             ->limit(2000)
             ->get();
 
-        return view('dashboard.user-groups.create', compact('supportUsers', 'users'));
+        return view('dashboard.user-groups.create', compact('supportUsers', 'users', 'assignmentRoles', 'assignmentUsers'));
     }
 
     public function store(Request $request)
@@ -56,6 +51,8 @@ class UserGroupController extends Controller
             'commission_mode' => 'nullable|in:inherit,custom',
             'support_user_ids' => 'nullable|array',
             'support_user_ids.*' => 'integer|exists:users,id',
+            'assignment_user_ids' => 'nullable|array',
+            'assignment_user_ids.*' => 'nullable|integer|exists:users,id',
             'member_user_ids' => 'nullable|array',
             'member_user_ids.*' => 'integer|exists:users,id',
             'rules' => 'nullable|array',
@@ -89,12 +86,15 @@ class UserGroupController extends Controller
                 foreach ($supportIds as $supportId) {
                     $syncData[$supportId] = [
                         'assigned_by' => auth()->id(),
+                        'assignment_role' => UserGroup::ASSIGNMENT_TECHNICAL_SUPPORT,
                         'created_at' => now(),
                         'updated_at' => now(),
                     ];
                 }
                 $group->supportAccounts()->sync($syncData);
             }
+
+            $this->syncGroupAssignments($group, $validated['assignment_user_ids'] ?? []);
 
             $memberIds = array_values(array_unique(array_map('intval', $validated['member_user_ids'] ?? [])));
             if (!empty($memberIds)) {
@@ -126,10 +126,20 @@ class UserGroupController extends Controller
         $group->load([
             'members:id,nam,mobile',
             'supportAccounts:id,nam,mobile,is_support,isAdmin',
+            'supportAccounts.roles',
             'commissionRules' => function ($query) {
                 $query->orderBy('event')->orderBy('level');
             },
         ]);
+
+        $assignmentRoles = UserGroup::ASSIGNMENT_ROLES;
+        $assignmentUsers = $this->assignmentUserOptions();
+        $groupAssignmentIds = [];
+        foreach (array_keys($assignmentRoles) as $assignmentRole) {
+            $groupAssignmentIds[$assignmentRole] = optional($group->supportAccounts->first(
+                fn ($support) => $support->pivot?->assignment_role === $assignmentRole
+            ))->id;
+        }
 
         $allUsers = User::query()
             ->select('id', 'nam', 'mobile', 'is_support', 'isAdmin')
@@ -137,7 +147,7 @@ class UserGroupController extends Controller
             ->limit(2000)
             ->get();
 
-        return view('dashboard.user-groups.show', compact('group', 'allUsers'));
+        return view('dashboard.user-groups.show', compact('group', 'allUsers', 'assignmentRoles', 'assignmentUsers', 'groupAssignmentIds'));
     }
 
     public function update(Request $request, UserGroup $group)
@@ -156,6 +166,8 @@ class UserGroupController extends Controller
             'subscription_days' => 'nullable|integer|min:1|max:3650',
             'support_user_ids' => 'nullable|array',
             'support_user_ids.*' => 'integer|exists:users,id',
+            'assignment_user_ids' => 'nullable|array',
+            'assignment_user_ids.*' => 'nullable|integer|exists:users,id',
         ]);
 
         DB::transaction(function () use ($group, $validated) {
@@ -181,12 +193,15 @@ class UserGroupController extends Controller
                 foreach ($supportIds as $supportId) {
                     $syncData[$supportId] = [
                         'assigned_by' => auth()->id(),
+                        'assignment_role' => UserGroup::ASSIGNMENT_TECHNICAL_SUPPORT,
                         'created_at' => now(),
                         'updated_at' => now(),
                     ];
                 }
                 $group->supportAccounts()->sync($syncData);
             }
+
+            $this->syncGroupAssignments($group, $validated['assignment_user_ids'] ?? []);
 
             $mode = $validated['subscription_operation'] ?? 'none';
             $days = (int) ($validated['subscription_days'] ?? 0);
@@ -260,16 +275,20 @@ class UserGroupController extends Controller
     {
         $validated = $request->validate([
             'support_user_id' => 'required|exists:users,id',
+            'assignment_role' => 'nullable|in:' . implode(',', array_keys(UserGroup::ASSIGNMENT_ROLES)),
         ]);
 
+        $assignmentRole = $validated['assignment_role'] ?? UserGroup::ASSIGNMENT_TECHNICAL_SUPPORT;
+
         $supportUser = User::query()->findOrFail($validated['support_user_id']);
-        if ((int) $supportUser->is_support !== 1 && (int) $supportUser->isAdmin !== 1) {
-            return redirect()->route('user-groups.show', $group)->with('error', 'فقط کاربر با دسترسی پشتیبانی یا مدیرکل قابل اساین است.');
+        if (!$this->userCanFillAssignmentRole($supportUser, $assignmentRole)) {
+            return redirect()->route('user-groups.show', $group)->with('error', 'این کاربر نقش لازم برای این جایگاه گروه را ندارد.');
         }
 
         $group->supportAccounts()->syncWithoutDetaching([
             $validated['support_user_id'] => [
                 'assigned_by' => auth()->id(),
+                'assignment_role' => $assignmentRole,
                 'created_at' => now(),
                 'updated_at' => now(),
             ],
@@ -301,6 +320,81 @@ class UserGroupController extends Controller
             ->pluck('id')
             ->map(fn ($id) => (int) $id)
             ->all();
+    }
+
+    private function assignmentUserOptions(): array
+    {
+        $options = [];
+
+        foreach (array_keys(UserGroup::ASSIGNMENT_ROLES) as $assignmentRole) {
+            $options[$assignmentRole] = $this->usersForAssignmentRole($assignmentRole)->get();
+        }
+
+        return $options;
+    }
+
+    private function usersForAssignmentRole(string $assignmentRole)
+    {
+        return User::query()
+            ->select('id', 'nam', 'name', 'mobile', 'is_support', 'isAdmin')
+            ->with('roles:id,name,slug')
+            ->where(function ($query) use ($assignmentRole) {
+                match ($assignmentRole) {
+                    UserGroup::ASSIGNMENT_SALES_SUPPORT => $query->whereHas('roles', fn ($roleQuery) => $roleQuery->where('slug', 'marketer')),
+                    UserGroup::ASSIGNMENT_TECHNICAL_SUPPORT => $query->where('is_support', 1)
+                        ->orWhere('isAdmin', 1)
+                        ->orWhereHas('roles', fn ($roleQuery) => $roleQuery->where('slug', 'support-manager')),
+                    UserGroup::ASSIGNMENT_SALES_EXPERT => $query->whereHas('roles', fn ($roleQuery) => $roleQuery->where('slug', 'sales-expert')),
+                    UserGroup::ASSIGNMENT_SALES_MANAGER => $query->where('isAdmin', 1)
+                        ->orWhereHas('roles', fn ($roleQuery) => $roleQuery->where('slug', 'sales-manager')),
+                    default => $query->whereRaw('1 = 0'),
+                };
+            })
+            ->orderByDesc('id')
+            ->limit(1000);
+    }
+
+    private function userCanFillAssignmentRole(User $user, string $assignmentRole): bool
+    {
+        return $this->usersForAssignmentRole($assignmentRole)
+            ->where('id', $user->id)
+            ->exists();
+    }
+
+    private function syncGroupAssignments(UserGroup $group, array $assignmentUserIds): void
+    {
+        $rows = [];
+        $now = now();
+
+        foreach (array_keys(UserGroup::ASSIGNMENT_ROLES) as $assignmentRole) {
+            $userId = (int) ($assignmentUserIds[$assignmentRole] ?? 0);
+            if ($userId <= 0) {
+                continue;
+            }
+
+            $user = User::query()->find($userId);
+            if (!$user || !$this->userCanFillAssignmentRole($user, $assignmentRole)) {
+                continue;
+            }
+
+            $rows[] = [
+                'user_group_id' => $group->id,
+                'support_user_id' => $userId,
+                'assigned_by' => auth()->id(),
+                'assignment_role' => $assignmentRole,
+                'created_at' => $now,
+                'updated_at' => $now,
+            ];
+        }
+
+        DB::table('user_group_support_accounts')
+            ->where('user_group_id', $group->id)
+            ->whereIn('assignment_role', array_keys(UserGroup::ASSIGNMENT_ROLES))
+            ->delete();
+
+        if (!empty($rows)) {
+            DB::table('user_group_support_accounts')->insert($rows);
+        }
     }
 
     private function applySubscriptionOperation(array $memberIds, string $mode, int $days): void

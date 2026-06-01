@@ -2,52 +2,58 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\Subscribe;
+use App\Models\SubscriptionPlan;
 use App\Models\SubscriptionTransaction;
-use App\Services\VipActivationSmsService;
-use Carbon\Carbon;
+use App\Services\SubscriptionActivationService;
+use Hekmatinasser\Verta\Verta;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Facades\Schema;
 
 class SubscriptionPaymentController extends Controller
 {
     private const CALLBACK_EXPIRE_MINUTES = 20;
 
-    private const PLANS = [
-        1 => [
-            'months' => 1,
-            'amount' => 4900000,
-            'title' => 'اشتراک یک ماهه',
-        ],
-        2 => [
-            'months' => 2,
-            'amount' => 8800000,
-            'title' => 'اشتراک دو ماهه',
-        ],
-        3 => [
-            'months' => 3,
-            'amount' => 11700000,
-            'title' => 'اشتراک سه ماهه',
-        ],
-    ];
-
     public function request(Request $request): RedirectResponse
     {
         $validated = $request->validate([
-            'plan' => 'required|integer|in:1,2,3',
+            'plan' => ['required', 'integer', 'exists:subscription_plans,id'],
+            'payment_method' => ['required', 'in:gateway,card_to_card'],
+            'receipt' => ['nullable', 'file', 'mimes:jpg,jpeg,png,pdf,webp', 'max:5120'],
+            'payer_card_number' => ['nullable', 'string', 'max:32'],
+            'manual_paid_at' => ['nullable', 'string', 'max:32'],
         ]);
 
-        $plan = self::PLANS[(int) $validated['plan']];
+        $plan = SubscriptionPlan::query()
+            ->where('is_active', true)
+            ->findOrFail((int) $validated['plan']);
+
+        if ($validated['payment_method'] === 'gateway') {
+            return $this->requestGatewayPayment($request, $plan);
+        }
+
+        return $this->requestCardToCardPayment($request, $plan);
+    }
+
+    private function requestGatewayPayment(Request $request, SubscriptionPlan $plan): RedirectResponse
+    {
+        if (!$plan->gateway_enabled || !$plan->gateway_price) {
+            return redirect()->route('subscription')->with([
+                'payment_state' => 'error',
+                'payment_message' => 'پرداخت درگاه برای این اشتراک فعال نیست.',
+            ]);
+        }
+
         $user = $request->user();
 
         $transaction = SubscriptionTransaction::query()->create([
             'user_id' => $user->id,
-            'plan_months' => $plan['months'],
-            'amount' => $plan['amount'],
+            'subscription_plan_id' => $plan->id,
+            'plan_months' => $plan->duration_months,
+            'amount' => $plan->gateway_price,
             'currency' => (string) config('zarinpal.currency', 'IRT'),
+            'payment_method' => 'gateway',
             'status' => SubscriptionTransaction::STATUS_PENDING,
             'message' => 'در انتظار پرداخت کاربر',
             'expires_at' => now()->addMinutes(self::CALLBACK_EXPIRE_MINUTES),
@@ -59,9 +65,9 @@ class SubscriptionPaymentController extends Controller
 
         try {
             $gateway = zarinpal()
-                ->amount((int) $plan['amount'])
+                ->amount((int) $plan->gateway_price)
                 ->request()
-                ->description($plan['title'] . ' - کاربر #' . $user->id)
+                ->description($plan->title . ' - کاربر #' . $user->id)
                 ->callbackUrl($callbackUrl);
 
             if (!empty($user->mobile)) {
@@ -115,6 +121,57 @@ class SubscriptionPaymentController extends Controller
         return $response->redirect() ?? redirect()->route('subscription')->with([
             'payment_state' => 'error',
             'payment_message' => 'هدایت به درگاه انجام نشد. دوباره تلاش کنید.',
+        ]);
+    }
+
+    private function requestCardToCardPayment(Request $request, SubscriptionPlan $plan): RedirectResponse
+    {
+        if (!$plan->card_to_card_enabled || !$plan->card_to_card_price) {
+            return redirect()->route('subscription')->with([
+                'payment_state' => 'error',
+                'payment_message' => 'پرداخت کارت به کارت برای این اشتراک فعال نیست.',
+            ]);
+        }
+
+        $rules = [];
+        if ($plan->receipt_required) {
+            $rules['receipt'] = ['required', 'file', 'mimes:jpg,jpeg,png,pdf,webp', 'max:5120'];
+        }
+        if ($plan->payer_card_required) {
+            $rules['payer_card_number'] = ['required', 'string', 'max:32'];
+        }
+        if ($plan->paid_at_required) {
+            $rules['manual_paid_at'] = ['required', 'string', 'max:32'];
+        }
+
+        $validated = $request->validate($rules, [
+            'receipt.required' => 'تصویر رسید را بارگذاری کنید.',
+            'payer_card_number.required' => 'شماره کارت واریزکننده را وارد کنید.',
+            'manual_paid_at.required' => 'تاریخ و ساعت پرداخت را وارد کنید.',
+        ]);
+
+        $receiptPath = $request->hasFile('receipt')
+            ? $request->file('receipt')->store('subscription-receipts', 'local')
+            : null;
+        $manualPaidAt = $this->parseManualPaidAt($validated['manual_paid_at'] ?? $request->input('manual_paid_at'));
+
+        SubscriptionTransaction::query()->create([
+            'user_id' => $request->user()->id,
+            'subscription_plan_id' => $plan->id,
+            'plan_months' => $plan->duration_months,
+            'amount' => $plan->card_to_card_price,
+            'currency' => (string) config('zarinpal.currency', 'IRT'),
+            'payment_method' => 'card_to_card',
+            'receipt_path' => $receiptPath,
+            'payer_card_number' => $validated['payer_card_number'] ?? $request->input('payer_card_number'),
+            'manual_paid_at' => $manualPaidAt,
+            'status' => SubscriptionTransaction::STATUS_PENDING,
+            'message' => 'در انتظار بررسی کارت به کارت توسط مدیریت',
+        ]);
+
+        return redirect()->route('subscription')->with([
+            'payment_state' => 'success',
+            'payment_message' => 'درخواست کارت به کارت ثبت شد و پس از تایید مدیریت، اشتراک فعال می‌شود.',
         ]);
     }
 
@@ -250,7 +307,7 @@ class SubscriptionPaymentController extends Controller
     ): void {
         $shouldSendSms = false;
         $smsUserId = 0;
-        $smsDays = 0;
+        $smsMonths = 0;
 
         DB::transaction(function () use (
             $transaction,
@@ -260,7 +317,7 @@ class SubscriptionPaymentController extends Controller
             $message,
             &$shouldSendSms,
             &$smsUserId,
-            &$smsDays
+            &$smsMonths
         ) {
             $fresh = SubscriptionTransaction::query()
                 ->where('id', $transaction->id)
@@ -274,7 +331,7 @@ class SubscriptionPaymentController extends Controller
             $subscribeId = $fresh->subscribe_id;
 
             if (!$subscribeId) {
-                $subscribeId = $this->activateSubscription($fresh->user_id, $fresh->plan_months, $fresh->amount, $refId);
+                $subscribeId = app(SubscriptionActivationService::class)->activate($fresh->user_id, $fresh->plan_months, $fresh->amount, $refId);
             }
 
             $fresh->update([
@@ -291,11 +348,11 @@ class SubscriptionPaymentController extends Controller
 
             $shouldSendSms = true;
             $smsUserId = (int) $fresh->user_id;
-            $smsDays = max(0, (int) $fresh->plan_months * 30);
+            $smsMonths = (int) $fresh->plan_months;
         });
 
-        if ($shouldSendSms && $smsUserId > 0 && $smsDays > 0) {
-            app(VipActivationSmsService::class)->sendByUserId($smsUserId, $smsDays);
+        if ($shouldSendSms && $smsUserId > 0 && $smsMonths > 0) {
+            app(SubscriptionActivationService::class)->sendActivationSms($smsUserId, $smsMonths);
         }
     }
 
@@ -312,56 +369,25 @@ class SubscriptionPaymentController extends Controller
         ]);
     }
 
-    private function activateSubscription(int $userId, int $planMonths, int $amount, ?string $trackingCode): int
+    private function parseManualPaidAt(?string $value): ?string
     {
-        $now = now();
+        $value = trim((string) $value);
 
-        $activeSub = Subscribe::query()
-            ->where('user_id', $userId)
-            ->where('status', 1)
-            ->whereNotNull('exp_vip')
-            ->orderByDesc('exp_vip')
-            ->first();
-
-        $extendFrom = ($activeSub && $activeSub->exp_vip && Carbon::parse($activeSub->exp_vip)->isFuture())
-            ? Carbon::parse($activeSub->exp_vip)
-            : $now->copy();
-
-        $endDate = $extendFrom->copy()->addMonths($planMonths);
-
-        Subscribe::query()
-            ->where('user_id', $userId)
-            ->where('status', 1)
-            ->update(['status' => 0]);
-
-        $subscribe = new Subscribe();
-        $subscribe->user_id = $userId;
-        $subscribe->vip = $planMonths;
-        $subscribe->start_vip = $now;
-        $subscribe->exp_vip = $endDate;
-        $subscribe->type = 3;
-        $subscribe->register_date = $now;
-        $subscribe->method = 1;
-        $subscribe->status = 1;
-
-        if (Schema::hasColumn('subscribes', 'price')) {
-            $subscribe->price = $amount;
+        if ($value === '') {
+            return null;
         }
 
-        if (Schema::hasColumn('subscribes', 'tracking_code')) {
-            $subscribe->tracking_code = $trackingCode;
+        foreach (['Y/m/d H:i', 'Y/m/d H:i:s', 'Y-m-d H:i', 'Y-m-d H:i:s'] as $format) {
+            try {
+                return Verta::parseFormat($format, $value, 'Asia/Tehran')
+                    ->toCarbon()
+                    ->format('Y-m-d H:i:s');
+            } catch (\Throwable) {
+                continue;
+            }
         }
 
-        if (Schema::hasColumn('subscribes', 'created_at')) {
-            $subscribe->created_at = $now;
-        }
-
-        if (Schema::hasColumn('subscribes', 'updated_at')) {
-            $subscribe->updated_at = $now;
-        }
-
-        $subscribe->save();
-
-        return (int) $subscribe->id;
+        return null;
     }
+
 }

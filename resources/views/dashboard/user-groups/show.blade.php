@@ -72,10 +72,12 @@
                                             <div class="mb-3">
                                                 <label class="form-label">حالت پورسانت گروه</label>
                                                 <select class="form-select" name="commission_mode" required>
-                                                    <option value="inherit" {{ old('commission_mode', $group->commission_mode) === 'inherit' ? 'selected' : '' }}>
+                                                    <option value="inherit"
+                                                        {{ old('commission_mode', $group->commission_mode) === 'inherit' ? 'selected' : '' }}>
                                                         ارث‌بری از تنظیمات پیش‌فرض سایت
                                                     </option>
-                                                    <option value="custom" {{ old('commission_mode', $group->commission_mode) === 'custom' ? 'selected' : '' }}>
+                                                    <option value="custom"
+                                                        {{ old('commission_mode', $group->commission_mode) === 'custom' ? 'selected' : '' }}>
                                                         قوانین اختصاصی همین گروه
                                                     </option>
                                                 </select>
@@ -133,21 +135,24 @@
                                             </div>
 
                                             <hr>
-                                            <h6 class="mb-2">پشتیبان‌های این گروه (ویرایش مستقیم)</h6>
-                                            <div class="mb-3">
-                                                <select class="form-select js-select2-multi" name="support_user_ids[]"
-                                                    multiple size="6">
-                                                    @foreach ($allUsers as $user)
-                                                        @if ((int) $user->is_support === 1 || (int) $user->isAdmin === 1)
-                                                            <option value="{{ $user->id }}"
-                                                                {{ in_array((int) $user->id, $currentSupportIds, true) ? 'selected' : '' }}>
-                                                                {{ $user->nam }} - {{ $user->mobile }}
-                                                            </option>
-                                                        @endif
-                                                    @endforeach
-                                                </select>
-                                                <small class="text-muted">با ذخیره فرم، لیست پشتیبان‌های گروه sync
-                                                    می‌شود.</small>
+                                            <h6 class="mb-2">مسئول‌های نقش‌دار این گروه</h6>
+                                            <div class="row g-3 mb-3">
+                                                @foreach ($assignmentRoles as $assignmentRole => $assignmentLabel)
+                                                    <div class="col-12 col-md-6">
+                                                        <label class="form-label">{{ $assignmentLabel }}</label>
+                                                        <select class="form-select js-select2-single"
+                                                            name="assignment_user_ids[{{ $assignmentRole }}]">
+                                                            <option value="">انتخاب نشده</option>
+                                                            @foreach ($assignmentUsers[$assignmentRole] ?? collect() as $assignmentUser)
+                                                                <option value="{{ $assignmentUser->id }}"
+                                                                    {{ (string) old('assignment_user_ids.' . $assignmentRole, $groupAssignmentIds[$assignmentRole] ?? '') === (string) $assignmentUser->id ? 'selected' : '' }}>
+                                                                    {{ $assignmentUser->nam ?: $assignmentUser->name ?: 'کاربر #' . $assignmentUser->id }}
+                                                                    - {{ $assignmentUser->mobile }}
+                                                                </option>
+                                                            @endforeach
+                                                        </select>
+                                                    </div>
+                                                @endforeach
                                             </div>
 
                                             <hr>
@@ -178,19 +183,28 @@
                             <div class="col-12 col-lg-7">
                                 <div class="card mb-4">
                                     <div class="card-body">
-                                        <h6 class="mb-3">اساین پشتیبان به گروه</h6>
+                                        <h6 class="mb-3">اساین سریع مسئول به گروه</h6>
                                         <form method="POST"
                                             action="{{ route('user-groups.supports.add', $group) }}">
                                             @csrf
                                             <div class="row g-2">
-                                                <div class="col-12 col-md-9">
+                                                <div class="col-12 col-md-4">
+                                                    <select class="form-select" name="assignment_role" required>
+                                                        @foreach ($assignmentRoles as $assignmentRole => $assignmentLabel)
+                                                            <option value="{{ $assignmentRole }}">
+                                                                {{ $assignmentLabel }}</option>
+                                                        @endforeach
+                                                    </select>
+                                                </div>
+                                                <div class="col-12 col-md-5">
                                                     <select class="form-select" name="support_user_id" required>
-                                                        <option value="">انتخاب اکانت پشتیبان</option>
-                                                        @foreach ($allUsers as $user)
-                                                            @if ((int) $user->is_support === 1 || (int) $user->isAdmin === 1)
+                                                        <option value="">انتخاب کاربر</option>
+                                                        @foreach ($assignmentUsers as $usersByRole)
+                                                            @foreach ($usersByRole as $user)
                                                                 <option value="{{ $user->id }}">
-                                                                    {{ $user->nam }} - {{ $user->mobile }}</option>
-                                                            @endif
+                                                                    {{ $user->nam ?: $user->name ?: 'کاربر #' . $user->id }}
+                                                                    - {{ $user->mobile }}</option>
+                                                            @endforeach
                                                         @endforeach
                                                     </select>
                                                 </div>
@@ -208,7 +222,7 @@
                                                         <th>#</th>
                                                         <th>نام</th>
                                                         <th>موبایل</th>
-                                                        <th>نقش</th>
+                                                        <th>جایگاه</th>
                                                         <th>عملیات</th>
                                                     </tr>
                                                 </thead>
@@ -219,11 +233,13 @@
                                                             <td>{{ $support->nam }}</td>
                                                             <td>{{ $support->mobile }}</td>
                                                             <td>
-                                                                @if ((int) $support->isAdmin === 1)
-                                                                    <span class="badge bg-label-danger">مدیرکل</span>
-                                                                @else
-                                                                    <span class="badge bg-label-warning">پشتیبان</span>
-                                                                @endif
+                                                                <span class="badge bg-label-warning">
+                                                                    {{ $assignmentRoles[$support->pivot?->assignment_role] ?? 'مسئول گروه' }}
+                                                                </span>
+                                                                @foreach ($support->roles as $role)
+                                                                    <span
+                                                                        class="badge bg-label-primary mb-1">{{ $role->name }}</span>
+                                                                @endforeach
                                                             </td>
                                                             <td>
                                                                 <form method="POST"
@@ -253,7 +269,8 @@
                                         @if (($group->commission_mode ?? 'inherit') === 'inherit')
                                             <div class="alert alert-info">
                                                 این گروه روی حالت <strong>ارث‌بری از تنظیمات پیش‌فرض سایت</strong> است.
-                                                برای اعمال قوانین اختصاصی، در فرم تنظیمات گروه حالت پورسانت را روی «قوانین اختصاصی همین گروه» بگذار.
+                                                برای اعمال قوانین اختصاصی، در فرم تنظیمات گروه حالت پورسانت را روی
+                                                «قوانین اختصاصی همین گروه» بگذار.
                                             </div>
                                         @endif
 
@@ -375,8 +392,12 @@
 
                                             <div class="d-flex gap-2 mt-2">
                                                 <button type="button" class="btn btn-label-primary"
-                                                    id="add-commission-rule" {{ ($group->commission_mode ?? 'inherit') !== 'custom' ? 'disabled' : '' }}>افزودن لول جدید</button>
-                                                <button type="submit" class="btn btn-primary" {{ ($group->commission_mode ?? 'inherit') !== 'custom' ? 'disabled' : '' }}>ذخیره پورسانت‌های
+                                                    id="add-commission-rule"
+                                                    {{ ($group->commission_mode ?? 'inherit') !== 'custom' ? 'disabled' : '' }}>افزودن
+                                                    لول جدید</button>
+                                                <button type="submit" class="btn btn-primary"
+                                                    {{ ($group->commission_mode ?? 'inherit') !== 'custom' ? 'disabled' : '' }}>ذخیره
+                                                    پورسانت‌های
                                                     لول‌بندی‌شده</button>
                                             </div>
                                         </form>
@@ -471,11 +492,10 @@
     <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
     <script src="{{ asset('/dashboard_theme') }}/assets/js/main.js"></script>
     <script>
-        $('.users').addClass('active').removeClass('open');
         $('.user-groups').addClass('active').removeClass('open');
 
         $(function() {
-            $('.js-select2-multi').select2({
+            $('.js-select2-multi, .js-select2-single').select2({
                 width: '100%',
                 dir: 'rtl'
             });

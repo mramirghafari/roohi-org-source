@@ -95,7 +95,10 @@
                 </li>
             @endif
 
-            @if (auth()->user()->isAdmin == 1)
+            @if (auth()->user()->isAdmin == 1 ||
+                    auth()->user()->supportGroups()->exists() ||
+                    auth()->user()->hasRole('sales-manager') ||
+                    auth()->user()->hasRole('sales-expert'))
                 <li class="menu-item users">
                     <a class="menu-link menu-toggle" href="javascript:void(0)">
                         <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24"
@@ -141,26 +144,53 @@
                                 <div>جستجوی کاربر</div>
                             </a>
                         </li>
-                        <li class="menu-item">
-                            <a class="menu-link" href="{{ route('lbank.checkBalance') }}">
-                                <div>چک بالانس ال بانک</div>
-                            </a>
-                        </li>
-                        <li class="menu-item">
-                            <a class="menu-link" href="{{ route('users.sendNotif') }}">
-                                <div>ارسال اعلان</div>
-                            </a>
-                        </li>
-                        <li class="menu-item user-groups">
-                            <a class="menu-link" href="{{ route('user-groups.index') }}">
-                                <div>گروه های کاربری</div>
-                            </a>
-                        </li>
-                        <li class="menu-item user-camps">
-                            <a class="menu-link" href="{{ route('payment-campaigns.index') }}">
-                                <div>مدیریت کمپین</div>
-                            </a>
-                        </li>
+                        @if (auth()->user()->isAdmin == 1)
+                            <li class="menu-item">
+                                <a class="menu-link" href="{{ route('lbank.checkBalance') }}">
+                                    <div>چک بالانس ال بانک</div>
+                                </a>
+                            </li>
+                            <li class="menu-item">
+                                <a class="menu-link" href="{{ route('users.sendNotif') }}">
+                                    <div>ارسال اعلان</div>
+                                </a>
+                            </li>
+                            <li class="menu-item managers">
+                                <a class="menu-link" href="{{ route('managers.index') }}">
+                                    <div>مدیران</div>
+                                </a>
+                            </li>
+                            <li class="menu-item user-roles">
+                                <a class="menu-link" href="{{ route('user-roles.index') }}">
+                                    <div>نقش های کاربری</div>
+                                </a>
+                            </li>
+                            <li class="menu-item audit-logs">
+                                <a class="menu-link" href="{{ route('audit-logs.index') }}">
+                                    <div>لاگ فعالیت ها</div>
+                                </a>
+                            </li>
+                            <li class="menu-item user-groups">
+                                <a class="menu-link" href="{{ route('user-groups.index') }}">
+                                    <div>گروه های کاربری</div>
+                                </a>
+                            </li>
+                            <li class="menu-item subscription-plans">
+                                <a class="menu-link" href="{{ route('subscription-plans.index') }}">
+                                    <div>تعریف اشتراک‌ها</div>
+                                </a>
+                            </li>
+                            <li class="menu-item subscription-payments">
+                                <a class="menu-link" href="{{ route('subscription-payments.index') }}">
+                                    <div>بررسی خرید اشتراک</div>
+                                </a>
+                            </li>
+                            <li class="menu-item user-camps">
+                                <a class="menu-link" href="{{ route('payment-campaigns.index') }}">
+                                    <div>مدیریت کمپین</div>
+                                </a>
+                            </li>
+                        @endif
                     </ul>
                 </li>
 

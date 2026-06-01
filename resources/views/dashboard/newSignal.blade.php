@@ -154,7 +154,11 @@
                                                             <label class="form-label" for="formFile">انتخاب
                                                                 تصویر</label>
                                                             <input class="form-control" id="formFile" type="file"
-                                                                name="signal_photo" />
+                                                                name="signal_photo"
+                                                                accept=".png,.jpg,.jpeg,.webp,.heic,.heif,image/png,image/jpeg,image/webp,image/heic,image/heif" />
+                                                            @error('signal_photo')
+                                                                <small class="text-danger d-block mt-1">{{ $message }}</small>
+                                                            @enderror
                                                         </div>
                                                     </div>
                                                     <h5 class="my-4">نماد ارز</h5>

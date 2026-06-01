@@ -111,7 +111,6 @@
     <script src="{{ asset('/dashboard_theme') }}/assets/vendor/js/menu.js"></script>
     <script src="{{ asset('/dashboard_theme') }}/assets/js/main.js"></script>
     <script>
-        $('.users').addClass('active').removeClass('open');
         $('.user-groups').addClass('active').removeClass('open');
     </script>
 </body>

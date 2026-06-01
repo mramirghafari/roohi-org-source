@@ -11,7 +11,9 @@ use App\Models\Bot1;
 use App\Models\Bot2;
 use App\Models\Signal;
 use App\Models\AppSetting;
+use App\Models\SubscriptionPlan;
 use App\Models\SubscriptionTransaction;
+use App\Http\Controllers\Admin\SalesTeamDashboardController;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Schema;
 
@@ -20,6 +22,10 @@ class DashboardController extends Controller
     private const REFERRAL_JOIN_CONDITION_KEY = 'referral_join_condition';
 
     public function dashboard () {
+
+        if ($this->shouldShowSalesTeamDashboard()) {
+            return app(SalesTeamDashboardController::class)->index();
+        }
 
         $startOfWeek = now()->startOfWeek(Carbon::SATURDAY); // شروع هفته: شنبه
         $now         = now();
@@ -90,6 +96,20 @@ class DashboardController extends Controller
 
         return view('dashboard.dashboard', compact('thisWeekVisibleSignals','thisWeekVisibleSignalsWait','thisWeekVisibleSignalsSood','thisWeekVisibleSignalsZarar','chartCategories', 'chartData', 'inviteLink', 'directReferralsCount', 'activeDirectReferralsCount', 'totalNetworkCount', 'activeNetworkCount'));
 
+    }
+
+    private function shouldShowSalesTeamDashboard(): bool
+    {
+        $user = auth()->user();
+
+        if (!$user || (int) $user->isAdmin === 1) {
+            return false;
+        }
+
+        return $user->supportGroups()->exists()
+            || $user->hasRole('marketer')
+            || $user->hasRole('sales-expert')
+            || $user->hasRole('sales-manager');
     }
 
     public function channel()
@@ -170,9 +190,19 @@ class DashboardController extends Controller
         $subscriptionTransactions = collect();
         if (Schema::hasTable('subscription_transactions')) {
             $subscriptionTransactions = SubscriptionTransaction::query()
+                ->with('subscriptionPlan')
                 ->where('user_id', $user->id)
                 ->latest('id')
                 ->limit(50)
+                ->get();
+        }
+
+        $subscriptionPlans = collect();
+        if (Schema::hasTable('subscription_plans')) {
+            $subscriptionPlans = SubscriptionPlan::query()
+                ->where('is_active', true)
+                ->orderBy('sort_order')
+                ->orderBy('id')
                 ->get();
         }
 
@@ -261,6 +291,7 @@ class DashboardController extends Controller
             'status',
             'days',
             'planType',
+            'subscriptionPlans',
             'subscriptionTransactions',
             'hasDemoSub',
             'demoSub'

@@ -52,7 +52,8 @@
                     <div class="container-xxl psm-0 pt-0 flex-grow-1 container-p-y">
                         <div class="row">
                             <div class="col-12">
-                                <form method="POST" action="{{ route('updateSignalProcess', $signal->id) }}">
+                                <form method="POST" action="{{ route('updateSignalProcess', $signal->id) }}"
+                                    enctype="multipart/form-data">
                                     @csrf
                                     <div class="card">
                                         <div
@@ -188,6 +189,27 @@
                                                                         @if ($signal->type == 2) checked @endif />
                                                                 </label>
                                                             </div>
+                                                        </div>
+                                                    </div>
+                                                    <hr />
+                                                    <h5 class="my-4">تصویر سیگنال</h5>
+                                                    <div class="row g-3">
+                                                        <div class="mb-3">
+                                                            @if ($signal->photo)
+                                                                <div class="mb-2">
+                                                                    <img src="{{ asset('/signals') }}/{{ $signal->photo }}"
+                                                                        alt="signal-{{ $signal->tracking_code }}"
+                                                                        style="max-width: 240px; max-height: 180px; border-radius: 12px; background: #000; object-fit: contain;">
+                                                                </div>
+                                                            @endif
+                                                            <label class="form-label" for="signalPhoto">ویرایش
+                                                                تصویر</label>
+                                                            <input class="form-control" id="signalPhoto" type="file"
+                                                                name="signal_photo"
+                                                                accept=".png,.jpg,.jpeg,.webp,.heic,.heif,image/png,image/jpeg,image/webp,image/heic,image/heif" />
+                                                            @error('signal_photo')
+                                                                <small class="text-danger d-block mt-1">{{ $message }}</small>
+                                                            @enderror
                                                         </div>
                                                     </div>
                                                     <hr />
@@ -373,9 +395,7 @@
     <script src="{{ asset('/dashboard_theme') }}/assets/js/main.js"></script>
     <!-- Page JS -->
     <script src="{{ asset('/dashboard_theme') }}/assets/js/form-layouts.js"></script>
-    <script>
-        $('.admin').addClass('active');
-    </script>
+    <script></script>
 </body>
 
 </html>

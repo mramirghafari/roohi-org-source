@@ -61,12 +61,16 @@
                                     <a class="btn {{ Request::routeIs(['users.leftUsers']) ? 'btn-primary' : 'btn-label-secondary' }} d-grid w-100 mb-2 waves-effect"
                                         href="{{ route('users.leftUsers') }}">کاربران رفته</a>
 
-                                    <a class="btn {{ Request::routeIs(['userSearch']) ? 'btn-primary' : 'btn-label-secondary' }} d-grid w-100 mb-2 waves-effect"
-                                        href="{{ route('userSearch') }}">جستجوی کاربر</a>
+                                    <a class="btn {{ Request::routeIs(['users.search']) ? 'btn-primary' : 'btn-label-secondary' }} d-grid w-100 mb-2 waves-effect"
+                                        href="{{ route('users.search') }}">جستجوی کاربر</a>
                                 </div>
                             </div>
                             <div class="col-12
         col-md-9">
+                                @if (!empty($isSalesTeamScope))
+                                    <div class="alert alert-info">آمار این صفحه فقط مربوط به کاربران گروه‌های اختصاص
+                                        داده‌شده به شماست.</div>
+                                @endif
                                 <div class="row text-nowrap">
                                     <div class="col-md-6 mb-4">
                                         <div class="card h-100">
@@ -182,7 +186,6 @@
 
         <script src="{{ asset('/dashboard_theme') }}/assets/js/main.js"></script>
         <script>
-            $('.users').addClass('active');
             $(function() {
                 var dt_without_ajax_table = $('.datatables-direct-basic');
 

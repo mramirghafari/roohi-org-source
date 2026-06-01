@@ -18,17 +18,23 @@ class SubscriptionTransaction extends Model
     protected $fillable = [
         'user_id',
         'admin_user_id',
+        'subscription_plan_id',
         'subscribe_id',
         'plan_months',
         'amount',
         'currency',
+        'payment_method',
         'ref_id',
         'card_pan',
+        'receipt_path',
+        'payer_card_number',
+        'manual_paid_at',
         'gateway_status',
         'gateway_code',
         'status',
         'message',
         'activated_at',
+        'admin_reviewed_at',
         'paid_at',
         'expires_at',
     ];
@@ -39,10 +45,17 @@ class SubscriptionTransaction extends Model
             'plan_months' => 'integer',
             'amount' => 'integer',
             'gateway_code' => 'integer',
+            'manual_paid_at' => 'datetime',
             'activated_at' => 'datetime',
+            'admin_reviewed_at' => 'datetime',
             'paid_at' => 'datetime',
             'expires_at' => 'datetime',
         ];
+    }
+
+    public function subscriptionPlan()
+    {
+        return $this->belongsTo(SubscriptionPlan::class);
     }
 
     public function user()

@@ -28,6 +28,7 @@
         rel="stylesheet" />
     <link href="{{ asset('/dashboard_theme') }}/assets/vendor/libs/datatables-buttons-bs5/buttons.bootstrap5.css"
         rel="stylesheet" />
+    <link href="{{ asset('/dashboard_theme') }}/assets/vendor/libs/select2/select2.css" rel="stylesheet" />
     <link href="{{ asset('/dashboard_theme') }}/assets/libs/flatpickr/flatpickr.css" rel="stylesheet" />
     <!-- Row Group CSS -->
     <link href="{{ asset('/dashboard_theme') }}/assets/vendor/libs/datatables-rowgroup-bs5/rowgroup.bootstrap5.css"
@@ -76,20 +77,58 @@
                                     <a class="btn {{ Request::routeIs(['users.leftUsers']) ? 'btn-primary' : 'btn-label-secondary' }} d-grid w-100 mb-2 waves-effect"
                                         href="{{ route('users.leftUsers') }}">کاربران رفته</a>
 
-                                    <a class="btn {{ Request::routeIs(['userSearch']) ? 'btn-primary' : 'btn-label-secondary' }} d-grid w-100 mb-2 waves-effect"
-                                        href="{{ route('userSearch') }}">جستجوی کاربر</a>
+                                    <a class="btn {{ Request::routeIs(['users.search']) ? 'btn-primary' : 'btn-label-secondary' }} d-grid w-100 mb-2 waves-effect"
+                                        href="{{ route('users.search') }}">جستجوی کاربر</a>
                                 </div>
                             </div>
                             <div class="col-12 col-md-10">
-                                @if (Request::routeIs(['bot1.users']))
-                                    {{ $Users->links() }}
+                                @if (!empty($isSalesTeamScope))
+                                    <div class="alert alert-info">در این بخش فقط کاربران گروه‌های اختصاص داده‌شده به شما
+                                        نمایش داده می‌شوند.</div>
                                 @endif
-
                                 <div class="card">
+                                    @if (!empty($canBulkGroupAssign))
+                                        <form method="POST" action="{{ route('users.bulkGroups') }}"
+                                            id="bulk-group-form">
+                                            @csrf
+                                            <div class="card-body border-bottom bulk-group-toolbar">
+                                                <div class="row g-3 align-items-end">
+                                                    <div class="col-12 col-xl-6 bulk-toolbar-field">
+                                                        <label class="form-label mb-2">افزودن دسته‌جمعی کاربران
+                                                            انتخاب‌شده به گروه</label>
+                                                        <select class="form-select js-bulk-group-select" name="group_id"
+                                                            required data-placeholder="انتخاب گروه مقصد">
+                                                            <option value=""></option>
+                                                            @foreach ($bulkGroups ?? collect() as $group)
+                                                                <option value="{{ $group->id }}">
+                                                                    {{ $group->name }}</option>
+                                                            @endforeach
+                                                        </select>
+                                                    </div>
+                                                    <div class="col-12 col-md-6 col-xl-3 bulk-toolbar-field">
+                                                        <label class="form-label mb-2">تعداد انتخاب‌شده</label>
+                                                        <div class="bulk-selected-box">
+                                                            <span id="bulk-selected-count">0</span>
+                                                            <small>کاربر انتخاب شده</small>
+                                                        </div>
+                                                    </div>
+                                                    <div class="col-12 col-md-6 col-xl-3 bulk-toolbar-field">
+                                                        <label class="form-label mb-2">عملیات گروهی</label>
+                                                        <button type="submit"
+                                                            class="btn btn-primary w-100 bulk-submit-btn">افزودن به
+                                                            گروه</button>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                    @endif
                                     <div class="card-datatable table-responsive pt-0">
                                         <table class="datatables-direct-basic table">
                                             <thead>
                                                 <tr>
+                                                    @if (!empty($canBulkGroupAssign))
+                                                        <th><input type="checkbox" class="form-check-input"
+                                                                id="bulk-select-all"></th>
+                                                    @endif
                                                     <th>ردیف</th>
                                                     <th>نام کاربر</th>
                                                     <th style="display: none;">موبایل</th>
@@ -102,86 +141,12 @@
                                                 </tr>
                                             </thead>
                                             <tbody>
-                                                @php($x = 1)
-                                                @foreach ($Users as $user)
-                                                    <tr>
-                                                        <td><bdi>{{ $x }}</bdi></td>
-                                                        <td>
-                                                            <div class="row flex-column">
-                                                                <div>
-                                                                    @if ($user->has_active_vip)
-                                                                        <small class="badge bg-label-success me-1"
-                                                                            style="padding: 5px"><svg
-                                                                                xmlns="http://www.w3.org/2000/svg"
-                                                                                width="18" height="18"
-                                                                                viewBox="0 0 24 24" fill="currentColor"
-                                                                                class="icon icon-tabler icons-tabler-filled icon-tabler-circle-check">
-                                                                                <path stroke="none" d="M0 0h24v24H0z"
-                                                                                    fill="none" />
-                                                                                <path
-                                                                                    d="M17 3.34a10 10 0 1 1 -14.995 8.984l-.005 -.324l.005 -.324a10 10 0 0 1 14.995 -8.336zm-1.293 5.953a1 1 0 0 0 -1.32 -.083l-.094 .083l-3.293 3.292l-1.293 -1.292l-.094 -.083a1 1 0 0 0 -1.403 1.403l.083 .094l2 2l.094 .083a1 1 0 0 0 1.226 0l.094 -.083l4 -4l.083 -.094a1 1 0 0 0 -.083 -1.32z" />
-                                                                            </svg></small>
-                                                                    @endif
-                                                                    <bdi>{{ $user->nam }}</bdi>
-
-                                                                </div>
-                                                                <div class="ps-5">
-                                                                    <small>{{ $user->mobile }}</small>
-                                                                </div>
-                                                            </div>
-
-                                                        </td>
-                                                        <td style="display: none;">{{ $user->mobile }}</td>
-                                                        <td
-                                                            data-start="{{ $user->activeSubscribe ? $user->activeSubscribe->start_vip->format('Y-m-d') : '' }}">
-                                                            @if ($user->activeSubscribe)
-                                                                <small>{{ verta($user->activeSubscribe->start_vip)->format('Y-m-d') }}</small>
-                                                            @else
-                                                                <small>-</small>
-                                                            @endif
-                                                        </td>
-                                                        <td
-                                                            data-end="{{ $user->activeSubscribe ? $user->activeSubscribe->exp_vip->format('Y-m-d') : '' }}">
-                                                            @if ($user->activeSubscribe)
-                                                                <small>{{ verta($user->activeSubscribe->exp_vip)->format('Y-m-d') }}</small>
-                                                            @else
-                                                                <small>-</small>
-                                                            @endif
-                                                        </td>
-                                                        <td>
-                                                            @if ($user->activeSubscribe)
-                                                                <small
-                                                                    class="badge {{ $user->vip_remaining_days > 10 ? 'bg-label-info' : 'bg-label-danger' }}">
-                                                                    {{ $user->vip_remaining_days . ' روز' }}</small>
-                                                            @else
-                                                                <small>-</small>
-                                                            @endif
-                                                        </td>
-                                                        <td>
-                                                            @if ($user->lbank_uid)
-                                                                <span
-                                                                    class="badge bg-label-success me-1 rounded p-1">{{ $user->lbank_uid }}</span>
-                                                            @else
-                                                                <span>-</span>
-                                                            @endif
-                                                        </td>
-                                                        <td>
-                                                            @if ($user->coincall_uid)
-                                                                <span
-                                                                    class="badge bg-label-info me-1 rounded p-1">{{ $user->coincall_uid }}</span>
-                                                            @else
-                                                                <span>-</span>
-                                                            @endif
-                                                        </td>
-
-                                                        <td><a href="{{ route('users.detail', $user->id) }}"
-                                                                class="btn btn-sm btn-info">مشاهده</a></td>
-                                                    </tr>
-                                                    @php($x++)
-                                                @endforeach
                                             </tbody>
                                         </table>
                                     </div>
+                                    @if (!empty($canBulkGroupAssign))
+                                        </form>
+                                    @endif
                                 </div>
                             </div>
                             <hr class="my-5" />
@@ -215,6 +180,8 @@
         <!-- Vendors JS -->
         <script src="{{ asset('/dashboard_theme') }}/assets/vendor/libs/datatables-bs5/datatables-bootstrap5.js"></script>
         <script src="{{ asset('/dashboard_theme') }}/assets/vendor/libs/datatables-bs5/i18n/fa.js"></script>
+        <script src="{{ asset('/dashboard_theme') }}/assets/vendor/libs/select2/select2.js"></script>
+        <script src="{{ asset('/dashboard_theme') }}/assets/vendor/libs/select2/i18n/fa.js"></script>
         <!-- Flat Picker -->
 
         <script src="https://cdn.datatables.net/buttons/2.4.2/js/dataTables.buttons.min.js"></script>
@@ -227,6 +194,69 @@
         <!-- Main JS -->
         <script src="{{ asset('/dashboard_theme') }}/assets/js/main.js"></script>
         <style>
+            .bulk-group-toolbar {
+                background: linear-gradient(135deg, #f8f7ff 0%, #ffffff 70%);
+            }
+
+            .bulk-toolbar-field {
+                display: flex;
+                flex-direction: column;
+            }
+
+            .bulk-toolbar-field .form-label {
+                min-height: 20px;
+                color: #5d596c;
+                font-size: 0.78rem;
+                font-weight: 600;
+            }
+
+            .bulk-selected-box {
+                min-height: 48px;
+                border: 1px solid #ebe9f1;
+                border-radius: 0.5rem;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                gap: 0.5rem;
+                background: #fff;
+                color: #5d596c;
+                font-weight: 600;
+            }
+
+            .bulk-selected-box span {
+                min-width: 34px;
+                height: 34px;
+                border-radius: 50%;
+                display: inline-flex;
+                align-items: center;
+                justify-content: center;
+                background: #7367f0;
+                color: #fff;
+            }
+
+            .bulk-submit-btn {
+                min-height: 48px;
+                font-weight: 700;
+            }
+
+            .bulk-group-toolbar .select2-container--default .select2-selection--single {
+                min-height: 48px;
+                border-color: #7367f0;
+                border-radius: 0.5rem;
+                display: flex;
+                align-items: center;
+            }
+
+            .bulk-group-toolbar .select2-container--default .select2-selection--single .select2-selection__rendered {
+                line-height: 46px;
+                padding-right: 1rem;
+                color: #5d596c;
+            }
+
+            .bulk-group-toolbar .select2-container--default .select2-selection--single .select2-selection__arrow {
+                height: 46px;
+            }
+
             div.dt-buttons {
                 position: initial;
                 padding: 10px;
@@ -240,8 +270,16 @@
             }
         </style>
         <script>
-            $('.users').addClass('active');
             $(function() {
+                if ($.fn.select2) {
+                    $('.js-bulk-group-select').select2({
+                        width: '100%',
+                        dir: 'rtl',
+                        placeholder: $('.js-bulk-group-select').data('placeholder'),
+                        allowClear: true
+                    });
+                }
+
                 var dt_without_ajax_table = $('.datatables-direct-basic');
 
                 if (dt_without_ajax_table.length) {
@@ -249,18 +287,107 @@
                         searching: true,
                         lengthChange: true,
                         ordering: true,
+                        processing: true,
+                        serverSide: true,
+                        ajax: '{{ $usersAjaxUrl }}',
                         pageLength: 100,
+                        lengthMenu: [
+                            [25, 50, 100],
+                            [25, 50, 100]
+                        ],
+                        order: [],
+                        columnDefs: [{
+                                targets: '_all',
+                                orderable: false
+                            },
+                            {
+                                targets: {{ !empty($canBulkGroupAssign) ? 3 : 2 }},
+                                visible: false,
+                                searchable: true
+                            }
+                        ],
+                        language: {
+                            processing: 'در حال جستجو...',
+                            search: 'جستجو:',
+                            lengthMenu: 'نمایش _MENU_ ردیف',
+                            zeroRecords: 'رکوردی پیدا نشد',
+                            info: 'نمایش _START_ تا _END_ از _TOTAL_ رکورد',
+                            infoEmpty: 'رکوردی برای نمایش وجود ندارد',
+                            infoFiltered: '(فیلتر شده از _MAX_ رکورد)',
+                            paginate: {
+                                first: 'اول',
+                                last: 'آخر',
+                                next: 'بعدی',
+                                previous: 'قبلی'
+                            }
+                        },
 
                         // ✅ فعال‌سازی دکمه‌ها
                         dom: 'fltip',
                         buttons: []
                     });
 
+                    dt_without_ajax.on('draw', function() {
+                        const selectAll = document.getElementById('bulk-select-all');
+                        const selectedCount = document.getElementById('bulk-selected-count');
+
+                        if (selectAll) {
+                            selectAll.checked = false;
+                        }
+
+                        if (selectedCount) {
+                            selectedCount.textContent = '0';
+                        }
+                    });
+
                     // دکمه export دستی
                     $('<div class="dt-buttons" style="padding: 10px;">' +
-                        '<a href="{{ route('users.export.excel', ['scope' => request()->routeIs('users.activeUsers') ? 'active' : (request()->routeIs('users.deactiveUsers') ? 'deactive' : (request()->routeIs('users.leftUsers') ? 'left' : 'all'))]) }}" class="btn btn-primary">' +
+                        '<a href="{{ route('users.export.excel', ['scope' => $exportScope ?? 'all']) }}" class="btn btn-primary">' +
                         'خروجی اکسل' +
                         '</a></div>').insertBefore('.dataTables_wrapper');
+                }
+            });
+
+            document.addEventListener('DOMContentLoaded', function() {
+                const selectAll = document.getElementById('bulk-select-all');
+                const selectedCount = document.getElementById('bulk-selected-count');
+                const form = document.getElementById('bulk-group-form');
+
+                const updateCount = () => {
+                    if (!selectedCount) {
+                        return;
+                    }
+                    selectedCount.textContent = document.querySelectorAll('.bulk-user-checkbox:checked').length;
+                };
+
+                if (selectAll) {
+                    selectAll.addEventListener('change', function() {
+                        document.querySelectorAll('.bulk-user-checkbox').forEach(function(checkbox) {
+                            checkbox.checked = selectAll.checked;
+                        });
+                        updateCount();
+                    });
+                }
+
+                document.addEventListener('change', function(event) {
+                    if (event.target.classList.contains('bulk-user-checkbox')) {
+                        updateCount();
+                    }
+                });
+
+                if (form) {
+                    form.addEventListener('submit', function(event) {
+                        if (document.querySelectorAll('.bulk-user-checkbox:checked').length === 0) {
+                            event.preventDefault();
+                            alert('حداقل یک کاربر را انتخاب کنید.');
+                            return;
+                        }
+
+                        if (!$('.js-bulk-group-select').val()) {
+                            event.preventDefault();
+                            alert('یک گروه مقصد انتخاب کنید.');
+                        }
+                    });
                 }
             });
         </script>

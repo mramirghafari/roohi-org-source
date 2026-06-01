@@ -10,57 +10,62 @@ use App\Models\ArchiveNotif;
 use App\Jobs\SendArchivedNotificationsJob;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
+use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\File;
+use Illuminate\Validation\ValidationException;
 use Carbon\Carbon;
 use Intervention\Image\ImageManager;
-use Intervention\Image\Drivers\Gd\Driver;
+use Intervention\Image\Drivers\Gd\Driver as GdDriver;
+use Intervention\Image\Drivers\Imagick\Driver as ImagickDriver;
+use Throwable;
 
 
 class SignalController extends Controller
 {
     private const SIGNAL_DELETE_MOBILE = '09396206108';
+    private const SIGNAL_PHOTO_EXTENSIONS = ['jpg', 'jpeg', 'png', 'webp', 'heic', 'heif'];
+
+    public function signalPhoto(string $photo)
+    {
+        abort_unless((bool) preg_match('/^[a-f0-9-]+\.webp$/i', $photo), 404);
+
+        foreach ($this->signalPhotoPaths($photo) as $path) {
+            if (is_file($path)) {
+                return response()->file($path, [
+                    'Cache-Control' => 'public, max-age=31536000, immutable',
+                ]);
+            }
+        }
+
+        abort(404);
+    }
 
     public function NewSignalProcess(Request $request) {
 
         //dd($request->all());
+        $this->validateSignalPhoto($request);
 
         /// Create Signal
         $user = \Auth::user();
-        $request['user_id'] = $user->id;
+        $data = $request->except('signal_photo');
+        $data['user_id'] = $user->id;
         $rand = rand(111111,999999);
         $CheckSignal = Signal::where('tracking_code',$rand)->count();
         if ($CheckSignal == 0) {
-            $request['tracking_code'] = $rand;
+            $data['tracking_code'] = $rand;
         }else {
-            $request['tracking_code'] = rand(111111,999999);
+            $data['tracking_code'] = rand(111111,999999);
         }
 
         if($request->hasFile('signal_photo')) {
-            $imageFile = $request->file('signal_photo');
-            $manager = new ImageManager(new Driver());
-            
-
-            $image = $manager->read($imageFile);
-            // تغییر سایز (حفظ نسبت)
-            $image->scaleDown(width: 850);
-            // نام فایل
-            $fileName = Str::uuid() . '.webp';
-
-            // ذخیره با کیفیت بهینه
-            $image->toWebp(70)->save(
-                public_path('signals/' . $fileName)
-            );
-
-           // $imageName = time().'.'.$image->getClientOriginalExtension() ?? 'jpg';
-           // $image->move($_SERVER['DOCUMENT_ROOT'].'/roohibot/signals', $imageName);
-            //$image->move(public_path('signals'), $imageName);
-            $request['photo'] = $fileName;
+            $data['photo'] = $this->storeSignalPhoto($request->file('signal_photo'));
         }
 
         //dd($request['photo']);
 
        // dd($request->all());
 
-        $Signal = Signal::create($request->all());
+        $Signal = Signal::create($data);
 
         $this->queueNewSignalNotif($Signal, $user->id);
 
@@ -157,19 +162,19 @@ class SignalController extends Controller
 
        
 
+        $this->validateSignalPhoto($request);
+
         $request->validate([
             'tp_level' => 'required|integer|in:0,1,2,3,4,5,6,7,8',
         ]);
 
         $value = (int) $request->tp_level;
         
-        
-
-        $signal->update([
+        $data = [
             'symbol' => $request->symbol,
             'type' => $request->type,
             'entryPrice1' => $request->entryPrice1,
-            'entryPrice2' => $request->entryPrice1,
+            'entryPrice2' => $request->entryPrice2,
             'sl' => $request->sl,
             'target1' => $request->target1,
             'target2' => $request->target2,
@@ -179,7 +184,20 @@ class SignalController extends Controller
             'laverege' => $request->laverege,
             'profit' => $request->profit,
             'isVisible' => $request->isVisible,
-        ]);
+        ];
+
+        $oldPhoto = null;
+
+        if ($request->hasFile('signal_photo')) {
+            $oldPhoto = $signal->photo;
+            $data['photo'] = $this->storeSignalPhoto($request->file('signal_photo'));
+        }
+
+        $signal->update($data);
+
+        if ($oldPhoto && $oldPhoto !== $signal->photo) {
+            $this->deleteSignalPhoto($oldPhoto);
+        }
 
         // 4) TP1..TP5
             if (in_array($value, [1,2,3,4,5], true)) {
@@ -271,5 +289,126 @@ class SignalController extends Controller
         ]);
 
         SendArchivedNotificationsJob::dispatch();
+    }
+
+    private function validateSignalPhoto(Request $request): void
+    {
+        $request->validate([
+            'signal_photo' => ['nullable', 'file', 'max:10240'],
+        ]);
+
+        if (!$request->hasFile('signal_photo')) {
+            return;
+        }
+
+        $extension = strtolower((string) $request->file('signal_photo')->getClientOriginalExtension());
+
+        if (!in_array($extension, self::SIGNAL_PHOTO_EXTENSIONS, true)) {
+            throw ValidationException::withMessages([
+                'signal_photo' => 'فرمت تصویر باید png، jpg، jpeg، webp، heic یا heif باشد.',
+            ]);
+        }
+    }
+
+    private function storeSignalPhoto(UploadedFile $imageFile): string
+    {
+        $directory = $this->writableSignalPhotoDirectory();
+        $extension = strtolower((string) $imageFile->getClientOriginalExtension());
+        $fileName = Str::uuid() . '.webp';
+        $path = $directory . DIRECTORY_SEPARATOR . $fileName;
+
+        try {
+            $image = $this->makeSignalImageManager($extension)->read($imageFile->getRealPath());
+            $image->scaleDown(width: 850);
+            $image->toWebp(70)->save($path);
+        } catch (Throwable $e) {
+            if ($e instanceof ValidationException) {
+                throw $e;
+            }
+
+            throw ValidationException::withMessages([
+                'signal_photo' => $this->signalPhotoErrorMessage($extension),
+            ]);
+        }
+
+        return $fileName;
+    }
+
+    private function writableSignalPhotoDirectory(): string
+    {
+        foreach ([public_path('signals'), storage_path('app/public/signals')] as $directory) {
+            try {
+                File::ensureDirectoryExists($directory, 0755, true);
+            } catch (Throwable $e) {
+                continue;
+            }
+
+            if (!is_writable($directory)) {
+                @chmod($directory, 0755);
+            }
+
+            if (is_writable($directory)) {
+                return $directory;
+            }
+        }
+
+        throw ValidationException::withMessages([
+            'signal_photo' => 'هیچ مسیر قابل نوشتنی برای ذخیره تصاویر سیگنال پیدا نشد.',
+        ]);
+    }
+
+    private function makeSignalImageManager(string $extension): ImageManager
+    {
+        if (in_array($extension, ['heic', 'heif'], true)) {
+            if (extension_loaded('imagick')) {
+                return new ImageManager(new ImagickDriver());
+            }
+
+            throw ValidationException::withMessages([
+                'signal_photo' => 'برای تبدیل تصویرهای HEIC/HEIF آیفون باید Imagick و پشتیبانی HEIF روی سرور فعال باشد.',
+            ]);
+        }
+
+        if (extension_loaded('gd')) {
+            return new ImageManager(new GdDriver());
+        }
+
+        if (extension_loaded('imagick')) {
+            return new ImageManager(new ImagickDriver());
+        }
+
+        throw ValidationException::withMessages([
+            'signal_photo' => 'برای تبدیل تصویر به WebP باید افزونه GD یا Imagick روی PHP فعال باشد.',
+        ]);
+    }
+
+    private function signalPhotoErrorMessage(string $extension): string
+    {
+        if (in_array($extension, ['heic', 'heif'], true)) {
+            return 'تصویر آیفون قابل تبدیل نشد. لطفا مطمئن شوید Imagick/libheif روی سرور فعال است.';
+        }
+
+        return 'تصویر قابل تبدیل به WebP نیست. لطفا یک فایل png، jpg، jpeg یا webp معتبر انتخاب کنید.';
+    }
+
+    private function deleteSignalPhoto(?string $photo): void
+    {
+        if (!$photo) {
+            return;
+        }
+
+        foreach ($this->signalPhotoPaths($photo) as $photoPath) {
+            if (is_file($photoPath)) {
+                @unlink($photoPath);
+            }
+        }
+    }
+
+    private function signalPhotoPaths(string $photo): array
+    {
+        return [
+            public_path('signals/' . $photo),
+            storage_path('app/public/signals/' . $photo),
+        ];
     }
 }

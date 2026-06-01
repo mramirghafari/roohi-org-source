@@ -187,7 +187,6 @@
     <script src="{{ asset('/dashboard_theme') }}/assets/vendor/libs/sweetalert2/sweetalert2.js"></script>
     <script src="{{ asset('/dashboard_theme') }}/assets/js/main.js"></script>
     <script>
-        $('.admin').addClass('active');
         $(function() {
             var dt_without_ajax_table = $('.datatables-direct-basic');
 

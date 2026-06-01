@@ -12,6 +12,7 @@ class UserGroupSupportAccount extends Pivot
         'user_group_id',
         'support_user_id',
         'assigned_by',
+        'assignment_role',
     ];
 
     public function group()

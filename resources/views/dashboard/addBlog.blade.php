@@ -229,8 +229,6 @@
 
 
 <script>
-    $('.blog_admin').addClass('active');
-
     $(function() {
         var dt_without_ajax_table = $('.datatables-direct-basic');
 

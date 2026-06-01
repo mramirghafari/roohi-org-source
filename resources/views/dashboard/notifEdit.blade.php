@@ -181,8 +181,6 @@
         referrerpolicy="origin" crossorigin="anonymous"></script>
 
     <script>
-        $('.users').addClass('active');
-
         // SweetAlert برای حذف دسته بندی
         document.addEventListener('click', async (e) => {
             const deleteBtn = e.target.closest('.delete-btn');
